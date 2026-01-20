@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  TECHNICIAN
+  CUSTOMER
+}
+
+enum Permission {
+  TICKET_DELETE
+  TICKET_DUPLICATE
+  TICKET_REASSIGN
+  TECH_MANAGE
+  DEPT_MANAGE
+}
+
+enum TicketStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketSource {
+  TECHNICIAN
+  PORTAL
+  PUBLIC
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  role         Role          @default(TECHNICIAN)
+  orgId        String?
+  org          Organization? @relation(fields: [orgId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  requestedTickets Ticket[]         @relation("RequesterTickets")
+  assignedTickets  Ticket[]         @relation("AssigneeTickets")
+  resolvedTickets  Ticket[]         @relation("ResolvedTickets")
+  ticketActivities TicketActivity[]
+
+  permissions      UserPermission[]
+  techDepartmentId String?
+  techDepartment   Department?      @relation(fields: [techDepartmentId], references: [id])
+}
+
+model UserPermission {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  perm      Permission
+  createdAt DateTime   @default(now())
+
+  @@unique([userId, perm])
+  @@index([userId])
+}
+
+enum DepartmentType {
+  TECH
+  HOSPITAL
+}
+
+model Department {
+  id        String         @id @default(cuid())
+  name      String
+  type      DepartmentType
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  techUsers User[]
+  tickets   Ticket[]
+
+  @@unique([name, type])
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users   User[]
+  tickets Ticket[]
+}
+
+model Ticket {
+  id          String         @id @default(cuid())
+  number      Int            @unique
+  subject     String
+  description String
+  status      TicketStatus   @default(NEW)
+  priority    TicketPriority @default(MEDIUM)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id])
+
+  requesterId String?
+  requester   User?   @relation("RequesterTickets", fields: [requesterId], references: [id])
+
+  assigneeId String?
+  assignee   User?   @relation("AssigneeTickets", fields: [assigneeId], references: [id])
+
+  hospitalDepartmentId String
+  hospitalDepartment   Department @relation(fields: [hospitalDepartmentId], references: [id])
+
+  // Source (who opened the ticket)
+  source TicketSource @default(TECHNICIAN)
+
+  // External requester (for public form without login)
+  externalRequesterName  String?
+  externalRequesterEmail String?
+  externalRequesterPhone String?
+
+  // Resolution
+
+  resolutionSummary String?
+  resolutionDetails String?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  resolvedById      String?
+  resolvedBy        User?     @relation("ResolvedTickets", fields: [resolvedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activities TicketActivity[]
+}
+
+model TicketActivity {
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  actorId String?
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  type      String
+  message   String
+  metaJson  String?
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+model Counter {
+  key   String @id
+  value Int
+}

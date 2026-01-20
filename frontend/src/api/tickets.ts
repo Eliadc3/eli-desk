@@ -1,0 +1,78 @@
+import { api } from "./client";
+
+export type TicketStatus = "NEW" | "IN_PROGRESS" | "WAITING" | "RESOLVED" | "CLOSED";
+export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type TicketSource = "TECHNICIAN" | "PORTAL" | "PUBLIC";
+
+export type UserLite = { id: string; name: string; email: string };
+export type DepartmentLite = { id: string; name: string; type: "HOSPITAL" | "TECH" };
+
+export type Ticket = {
+  id: string;
+  number: number;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  source: TicketSource;
+  createdAt: string;
+  updatedAt: string;
+  requester?: UserLite | null;
+  assignee?: UserLite | null;
+  hospitalDepartment?: DepartmentLite | null;
+  externalRequesterName?: string | null;
+  externalRequesterEmail?: string | null;
+  externalRequesterPhone?: string | null;
+  resolutionSummary?: string | null;
+  resolutionDetails?: string | null;
+};
+
+export type TicketActivity = {
+  id: string;
+  type: string;
+  message: string;
+  createdAt: string;
+  actor?: UserLite | null;
+  metaJson?: string | null;
+};
+
+export async function listTickets(params?: { status?: string }) {
+  const { data } = await api.get("/tickets", { params });
+  return data.items as Ticket[];
+}
+
+export async function getTicket(id: string) {
+  const { data } = await api.get(`/tickets/${id}`);
+  return data as Ticket & { activities: TicketActivity[] };
+}
+
+export async function createTicket(payload: {
+  hospitalDepartmentId: string;
+  subject: string;
+  description: string;
+  priority?: TicketPriority;
+  requesterId?: string;
+  assigneeId?: string;
+}) {
+  const { data } = await api.post("/tickets", payload);
+  return data;
+}
+
+export async function updateTicket(id: string, payload: any) {
+  const { data } = await api.patch(`/tickets/${id}`, payload);
+  return data;
+}
+
+export async function createPublicTicket(payload: {
+  hospitalDepartmentId: string;
+  subject: string;
+  description: string;
+  priority?: TicketPriority;
+  name?: string;
+  email?: string;
+  phone?: string;
+  orgId?: string;
+}) {
+  const { data } = await api.post("/public/tickets", payload);
+  return data.ticket ?? data;
+}
