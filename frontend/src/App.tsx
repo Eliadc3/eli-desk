@@ -22,22 +22,30 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          {/* כל המערכת נעולה */}
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+
           <Route path="/tickets" element={<ProtectedRoute><Tickets /></ProtectedRoute>} />
           <Route path="/tickets/new" element={<ProtectedRoute><NewTicket /></ProtectedRoute>} />
           <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/public/new" element={<PublicNewTicket />} />
+
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-          {/* Placeholder routes */}
-          <Route path="/customers" element={<Index />} />
-          <Route path="/organizations" element={<Index />} />
-          <Route path="/assets" element={<Index />} />
-          <Route path="/knowledge-base" element={<Index />} />
-          <Route path="/automations" element={<Index />} />
-          <Route path="/reports" element={<Index />} />
-          <Route path="/settings" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
+          {/* Public */}
+          <Route path="/public/new" element={<PublicNewTicket />} />
+
+          {/* Auth */}
+          <Route path="/login" element={<Login />} />
+
+          {/* Placeholder routes – גם נעולים כדי שלא יראו “מערכת” בלי הזדהות */}
+          <Route path="/customers" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/organizations" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/assets" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/knowledge-base" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/automations" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

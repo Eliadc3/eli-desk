@@ -1,6 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-const data = [
+type SLADataPoint = { name: string; met: number; breached: number };
+
+const fallbackData: SLADataPoint[] = [
   { name: "ינואר", met: 45, breached: 5 },
   { name: "פברואר", met: 52, breached: 8 },
   { name: "מרץ", met: 48, breached: 3 },
@@ -9,7 +11,9 @@ const data = [
   { name: "יוני", met: 67, breached: 2 },
 ];
 
-export function SLAComplianceChart() {
+export function SLAComplianceChart({ data }: { data?: SLADataPoint[] }) {
+  const chartData = data && data.length ? data : fallbackData;
+
   return (
     <div className="bg-card rounded-lg p-5 border border-border shadow-card">
       <div className="flex items-center justify-between mb-4">
@@ -29,7 +33,7 @@ export function SLAComplianceChart() {
       </div>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barGap={2}>
+          <BarChart data={chartData} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey="name"

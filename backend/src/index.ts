@@ -15,6 +15,7 @@ import { labelRouter } from "./routes/label.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
 import { publicRouter } from "./routes/public.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use("/public", rateLimit({ windowMs: 60_000, limit: 30 }), publicRouter);
 app.use("/tickets", requireAuth, ticketsRouter);
 app.use("/label", requireAuth, labelRouter);
 app.use("/departments", requireAuth, departmentsRouter);
+app.use("/dashboard", requireAuth, dashboardRouter);
 
 // Admin routes
 app.use("/admin", requireAuth, adminRouter);

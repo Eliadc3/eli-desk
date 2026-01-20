@@ -5,6 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth();
   if (loading) return null;
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/login" replace state={{ from: location.pathname }}/>;
   return <>{children}</>;
 }
