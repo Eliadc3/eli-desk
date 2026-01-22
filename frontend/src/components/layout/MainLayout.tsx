@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Bell, Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useNavigate } from "react-router-dom";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -14,7 +15,8 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, title, subtitle, actions }: MainLayoutProps) {
   const [sidebarCollapsed] = useState(false);
-
+    const nav = useNavigate();
+  
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <Sidebar />
@@ -50,7 +52,7 @@ export function MainLayout({ children, title, subtitle, actions }: MainLayoutPro
               </div>
 
               {/* Quick Actions */}
-              <Button size="sm" className="gap-2">
+              <Button size="sm" className="gap-2" onClick={() => nav("/tickets/new")}>
                 <Plus className="w-4 h-4" />
                 קריאה חדשה
               </Button>

@@ -53,11 +53,7 @@ export default function TicketDetail() {
     }
   };
 
-  const onPrintLabel = () => {
-    const apiUrl = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:3001";
-    window.open(`${apiUrl}/label/${id}?size=small`, "_blank");
-  };
-
+  
   if (q.isLoading) {
     return (
       <MainLayout>
@@ -87,9 +83,7 @@ export default function TicketDetail() {
             <Button variant="outline" onClick={() => nav("/tickets")}>
               Back
             </Button>
-            <Button variant="outline" onClick={onPrintLabel}>
-              Print label
-            </Button>
+            
 
             {canDup && (
               <Button

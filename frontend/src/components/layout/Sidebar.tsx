@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Headphones,
   LogOut,
+  UserRoundCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ const secondaryNavItems = [
   { icon: Zap, label: "אוטומציות", href: "/automations" },
   { icon: BarChart3, label: "דוחות", href: "/reports" },
   { icon: Settings, label: "הגדרות", href: "/settings" },
+  { icon: UserRoundCog, label: "ניהול", href: "/admin" },
 ];
 
 export function Sidebar() {

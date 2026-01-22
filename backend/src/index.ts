@@ -11,7 +11,6 @@ import { Role } from "@prisma/client";
 import { authRouter } from "./routes/auth.js";
 import { ticketsRouter } from "./routes/tickets.js";
 import { demoRouter } from "./routes/demo.js";
-import { labelRouter } from "./routes/label.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
 import { publicRouter } from "./routes/public.js";
@@ -51,7 +50,6 @@ app.use("/public", rateLimit({ windowMs: 60_000, limit: 30 }), publicRouter);
 
 // Protected routes
 app.use("/tickets", requireAuth, ticketsRouter);
-app.use("/label", requireAuth, labelRouter);
 app.use("/departments", requireAuth, departmentsRouter);
 app.use("/dashboard", requireAuth, dashboardRouter);
 
