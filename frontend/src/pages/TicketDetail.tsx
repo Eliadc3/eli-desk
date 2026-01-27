@@ -112,23 +112,15 @@ export default function TicketDetail() {
 
   const t = q.data as any;
 
-
-  const deptsQ = useQuery({
+const deptsQ = useQuery({
   queryKey: ["meta-hospital-departments"],
-  queryFn: () => listHospitalDepartments(),
+  queryFn: listHospitalDepartments,
   staleTime: 1000 * 60 * 60,
 });
 
-const departments = (deptsQ.data ?? []) as { id: string; name: string }[];
+const departmentName =
+  (deptsQ.data ?? []).find(d => d.id === t?.hospitalDepartmentId)?.name ?? "—";
 
-const departmentName = (() => {
-  const depId = t?.hospitaldepartmentid;
-  if (depId == null) return "—";
-
-  const depIdStr = String(depId).trim();
-  const match = departments.find(d => String(d.id).trim() === depIdStr);
-  return match?.name ?? `מחלקה לא נמצאה (ID: ${depIdStr})`;
-})();
 
   const canDelete = hasAnyPermission(me, ["TICKET_DELETE"]);
   const canDup = hasAnyPermission(me, ["TICKET_DUPLICATE"]);
@@ -242,6 +234,13 @@ const departmentName = (() => {
   const statusBadgeClass = statusTone(t.status);
   const priorityBadgeClass = priorityTone(t.priority);
   console.log("Rendering ticket detail for", t);
+
+  console.log("dept debug", {
+  ticketDeptId: t?.hospitalDepartmentId,
+  deptsCount: (deptsQ.data ?? []).length,
+  firstDept: (deptsQ.data ?? [])[0],
+});
+
   return (
     <MainLayout>
       <div className="space-y-5">

@@ -43,7 +43,7 @@ function buildLabelHtml(data: TicketLabelData) {
 
   const subject = escapeHtml((data.subject ?? "").trim());
   const description = escapeHtml((data.description ?? "").trim());
-  const content = [subject, description].filter(Boolean).join("\n").trim() || "—";
+
 
   // Default label size: 90mm x 57mm (common label printers)
   return `<!doctype html>
@@ -128,7 +128,7 @@ function buildLabelHtml(data: TicketLabelData) {
         <div class="row" style="grid-column: 1 / -1"><div class="k">פותח:</div><div class="v" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${requester}</div></div>
       </div>
 
-      <div class="content">${content}</div>
+      <div class="content"><div class="v">נושא: \t</div><div class="k">${subject}</div><div class="v">\nפירוט: \t</div><div class="k">${description}</div></div>
     </div>
     <div class="hint">אם המדפסת שלך היא מדפסת מדבקות, בחר גודל נייר מתאים בחלון ההדפסה.</div>
     <script>
