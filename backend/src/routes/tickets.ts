@@ -75,6 +75,7 @@ ticketsRouter.get("/:id", async (req, res, next) => {
       include: {
         org: true,
         requester: { select: { id: true, name: true, email: true } },
+        hospitalDepartment: { select: { id: true, name: true, type: true } },
         assignee: { select: { id: true, name: true, email: true } },
         resolvedBy: { select: { id: true, name: true, email: true } },
         activities: { orderBy: { createdAt: "asc" }, include: { actor: { select: { id: true, name: true } } } },

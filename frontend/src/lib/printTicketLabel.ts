@@ -2,51 +2,51 @@
 // Prints a small "label" with ticket details, fully client-side (no server storage).
 
 export type TicketLabelData = {
-  number: string | number;
-  department?: string | null;
-  requester?: string | null;
-  assignee?: string | null;
-  createdAt?: string | Date | null;
-  subject?: string | null;
-  description?: string | null;
+    number: string | number;
+    department?: string | null;
+    requester?: string | null;
+    assignee?: string | null;
+    createdAt?: string | Date | null;
+    subject?: string | null;
+    description?: string | null;
 };
 
 function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }
 
 
 function fmtDate(d?: string | Date | null) {
-  if (!d) return "—";
-  const dt = typeof d === "string" ? new Date(d) : d;
-  if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleString("he-IL", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    if (!d) return "—";
+    const dt = typeof d === "string" ? new Date(d) : d;
+    if (Number.isNaN(dt.getTime())) return "—";
+    return dt.toLocaleString("he-IL", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
 function buildLabelHtml(data: TicketLabelData) {
-  const number = escapeHtml(String(data.number ?? ""));
-  const department = escapeHtml(data.department ?? "—");
-  const requester = escapeHtml(data.requester ?? "—");
-  const assignee = escapeHtml(data.assignee ?? "לא משויך");
-  const createdAt = escapeHtml(fmtDate(data.createdAt));
+    const number = escapeHtml(String(data.number ?? ""));
+    const department = escapeHtml(data.department ?? "—");
+    const requester = escapeHtml(data.requester ?? "—");
+    const assignee = escapeHtml(data.assignee ?? "לא משויך");
+    const createdAt = escapeHtml(fmtDate(data.createdAt));
 
-  const subject = escapeHtml((data.subject ?? "").trim());
-  const description = escapeHtml((data.description ?? "").trim());
+    const subject = escapeHtml((data.subject ?? "").trim());
+    const description = escapeHtml((data.description ?? "").trim());
 
 
-  // Default label size: 90mm x 57mm (common label printers)
-  return `<!doctype html>
+    // Default label size: 90mm x 57mm (common label printers)
+    return `<!doctype html>
 <html lang="he" dir="rtl">
   <head>
     <meta charset="utf-8" />
@@ -96,18 +96,33 @@ function buildLabelHtml(data: TicketLabelData) {
       .row { display: flex; gap: 6px; min-width: 0; }
       .k { font-size: 10px; color: #444; white-space: nowrap; }
       .v { font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .content {
-        margin-top: 2px;
-        padding-top: 6px;
-        border-top: 1px dashed #777;
-        font-size: 11px;
-        line-height: 1.25;
-        white-space: pre-wrap;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 6;
-        -webkit-box-orient: vertical;
-      }
+      .content { margin-top: 6px;  border-top: 1px dashed #000;  padding-top: 4px;  font-size: 11px; line-height: 1.25;
+      
+
+  /* שמירה על ירידות שורה שאתה שולח (\n) */
+  white-space: pre-wrap;
+
+  /* זה החלק הקריטי: שבירת שורה לפי רוחב המדבקה */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  /* שלא יגלוש החוצה */
+  max-width: 100%;
+
+  max-height: 28mm;
+overflow: hidden;
+
+
+  }
+.content .v,
+.content .k {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: block;
+}
+
+
       .hint { display: none; }
       @media screen {
         body { background: #f6f7f8; padding: 12px; }
@@ -145,22 +160,22 @@ function buildLabelHtml(data: TicketLabelData) {
 }
 
 export function printTicketLabel(data: TicketLabelData) {
-  const html = buildLabelHtml(data);
+    const html = buildLabelHtml(data);
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
 
-  const w = window.open(url, "_blank", "noopener,noreferrer,width=520,height=520");
-  if (!w) {
-    URL.revokeObjectURL(url);
-    throw new Error("Popup was blocked. Please allow popups for this site and try again.");
-  }
-
-  setTimeout(() => {
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      // ignore
+    const w = window.open(url, "_blank", "noopener,noreferrer,width=520,height=520");
+    if (!w) {
+        URL.revokeObjectURL(url);
+        throw new Error("Popup was blocked. Please allow popups for this site and try again.");
     }
-  }, 30_000);
+
+    setTimeout(() => {
+        try {
+            URL.revokeObjectURL(url);
+        } catch {
+            // ignore
+        }
+    }, 30_000);
 }

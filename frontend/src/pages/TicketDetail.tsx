@@ -311,7 +311,7 @@ const departmentName =
 
                     printTicketLabel({
                       number: t.number,
-                      department: t.departmentName,
+                      department: t.hospitalDepartment?.name,
                       requester: t.externalRequesterName,
                       assignee: t.assignee?.name,
                       createdAt: t.createdAt,
@@ -449,7 +449,7 @@ const departmentName =
                   <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div className="min-w-0">
                     <div className="text-xs text-muted-foreground">HOSPITAL DEPARTMENT</div>
-                    <div className="font-medium truncate">{t.department?.name ?? "—"}</div>
+                    <div className="font-medium truncate">{t.hospitalDepartment?.name ?? "—"}</div>
                   </div>
                 </div>
 
