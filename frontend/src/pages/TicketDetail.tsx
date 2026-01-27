@@ -40,6 +40,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { listTicketStatuses } from "@/api/meta";
+import { printTicketLabel } from "@/lib/printTicketLabel";
+import { listHospitalDepartments } from "@/api/departments";
 
 const STATUS_STALE_TIME = 1000 * 60 * 60;
 
@@ -109,6 +111,24 @@ export default function TicketDetail() {
   });
 
   const t = q.data as any;
+
+
+  const deptsQ = useQuery({
+  queryKey: ["meta-hospital-departments"],
+  queryFn: () => listHospitalDepartments(),
+  staleTime: 1000 * 60 * 60,
+});
+
+const departments = (deptsQ.data ?? []) as { id: string; name: string }[];
+
+const departmentName = (() => {
+  const depId = t?.hospitaldepartmentid;
+  if (depId == null) return "—";
+
+  const depIdStr = String(depId).trim();
+  const match = departments.find(d => String(d.id).trim() === depIdStr);
+  return match?.name ?? `מחלקה לא נמצאה (ID: ${depIdStr})`;
+})();
 
   const canDelete = hasAnyPermission(me, ["TICKET_DELETE"]);
   const canDup = hasAnyPermission(me, ["TICKET_DUPLICATE"]);
@@ -221,7 +241,7 @@ export default function TicketDetail() {
 
   const statusBadgeClass = statusTone(t.status);
   const priorityBadgeClass = priorityTone(t.priority);
-
+  console.log("Rendering ticket detail for", t);
   return (
     <MainLayout>
       <div className="space-y-5">
@@ -286,6 +306,25 @@ export default function TicketDetail() {
                     Duplicate
                   </Button>
                 )}
+                <button
+                  onClick={() => {
+                    if (!t) return;
+
+                    printTicketLabel({
+                      number: t.number,
+                      department: t.departmentName,
+                      requester: t.externalRequesterName,
+                      assignee: t.assignee?.name,
+                      createdAt: t.createdAt,
+                      subject: t.subject,
+                      description: t.description,
+                    });
+                  }}
+                  className="bg-blue-600 text-white px-3 py-1 rounded"
+                >
+                  הדפס מדבקה
+                </button>
+
 
                 {canDelete && (
                   <Button
@@ -411,7 +450,7 @@ export default function TicketDetail() {
                   <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div className="min-w-0">
                     <div className="text-xs text-muted-foreground">HOSPITAL DEPARTMENT</div>
-                    <div className="font-medium truncate">{t.hospitalDepartment?.name ?? "—"}</div>
+                    <div className="font-medium truncate">{t.department?.name ?? "—"}</div>
                   </div>
                 </div>
 
