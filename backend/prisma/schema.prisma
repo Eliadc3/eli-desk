@@ -108,6 +108,7 @@ model Ticket {
   number      Int            @unique
   subject     String
   description String
+  notes       String? 
   status      TicketStatus   @default(NEW)
   priority    TicketPriority @default(MEDIUM)
 

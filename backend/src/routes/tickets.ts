@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../lib/httpError.js";
 import { ticketCreateSchema, ticketPatchSchema } from "./schemas.js";
-import { Role, TicketStatus, TicketSource } from "@prisma/client";
+import { Role, TicketStatus, TicketSource, Permission } from "@prisma/client";
 
 export const ticketsRouter = Router();
 
@@ -164,6 +164,27 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
         throw new HttpError(400, "resolutionSummary is required when resolving/closing");
       }
     }
+
+        // Reassign permission guard (even via PATCH)
+    const wantsReassign =
+      Object.prototype.hasOwnProperty.call(body, "assigneeId") &&
+      body.assigneeId !== existing.assigneeId;
+
+    if (wantsReassign) {
+      // admins are always allowed
+      if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN) {
+        const found = await prisma.userPermission.findUnique({
+          where: {
+            userId_perm: { userId: sub, perm: Permission.TICKET_REASSIGN },
+          },
+        });
+
+        if (!found) {
+          throw new HttpError(403, "Missing permission: TICKET_REASSIGN");
+        }
+      }
+    }
+
 
     const data: any = { ...body };
 

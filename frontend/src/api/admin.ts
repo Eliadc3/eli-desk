@@ -76,3 +76,15 @@ export async function deleteTicket(id: string) {
   const { data } = await api.delete(`/admin/tickets/${id}`);
   return data as { ok: boolean };
 }
+
+export type AssigneeLite = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+export async function listAssignees() {
+  const { data } = await api.get("/admin/assignees");
+  return data.items as AssigneeLite[];
+}
+

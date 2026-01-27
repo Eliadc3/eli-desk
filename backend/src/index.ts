@@ -15,6 +15,7 @@ import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
 import { publicRouter } from "./routes/public.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { metaRouter } from "./routes/meta.js";
 
 const app = express();
 
@@ -42,6 +43,8 @@ app.use(morgan("dev"));
 app.use(rateLimit({ windowMs: 60_000, limit: 120 }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.use("/meta", metaRouter);
 
 app.use("/auth", authRouter);
 

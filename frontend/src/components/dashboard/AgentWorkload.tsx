@@ -10,15 +10,9 @@ interface Agent {
   capacity: number;
 }
 
-const fallbackAgents: Agent[] = [
-  { id: "1", name: "יוסי כהן", initials: "יכ", openTickets: 8, resolvedToday: 5, capacity: 12 },
-  { id: "2", name: "מיכל לוי", initials: "מל", openTickets: 5, resolvedToday: 7, capacity: 12 },
-  { id: "3", name: "דוד אברהם", initials: "דא", openTickets: 11, resolvedToday: 3, capacity: 12 },
-  { id: "4", name: "שרה גולן", initials: "שג", openTickets: 3, resolvedToday: 8, capacity: 12 },
-];
 
 export function AgentWorkload({ agents }: { agents?: Agent[] }) {
-  const list = agents && agents.length ? agents : fallbackAgents;
+  const list = agents || [];
 
   return (
     <div className="bg-card rounded-lg p-5 border border-border shadow-card">

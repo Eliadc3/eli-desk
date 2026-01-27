@@ -49,6 +49,23 @@ adminRouter.delete("/departments/:id", requirePermission(Permission.DEPT_MANAGE)
   } catch (e) { next(e); }
 });
 
+// Assignees
+adminRouter.get("/assignees", requirePermission(Permission.TICKET_REASSIGN), async (_req, res, next) => {
+  try {
+    const items = await prisma.user.findMany({
+      where: { role: Role.TECHNICIAN },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    });
+
+    res.json({ items });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
+
 // Technicians
 adminRouter.get("/technicians", requirePermission(Permission.TECH_MANAGE), async (_req, res, next) => {
   try {

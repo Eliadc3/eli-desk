@@ -2,17 +2,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 type SLADataPoint = { name: string; met: number; breached: number };
 
-const fallbackData: SLADataPoint[] = [
-  { name: "ינואר", met: 45, breached: 5 },
-  { name: "פברואר", met: 52, breached: 8 },
-  { name: "מרץ", met: 48, breached: 3 },
-  { name: "אפריל", met: 61, breached: 4 },
-  { name: "מאי", met: 55, breached: 6 },
-  { name: "יוני", met: 67, breached: 2 },
-];
-
 export function SLAComplianceChart({ data }: { data?: SLADataPoint[] }) {
-  const chartData = data && data.length ? data : fallbackData;
+  const chartData = data || [];
 
   return (
     <div className="bg-card rounded-lg p-5 border border-border shadow-card">

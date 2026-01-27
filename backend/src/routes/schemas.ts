@@ -23,6 +23,7 @@ export const ticketPatchSchema = z.object({
   priority: z.nativeEnum(TicketPriority).optional(),
   status: z.nativeEnum(TicketStatus).optional(),
   assigneeId: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   resolutionSummary: z.string().min(3).nullable().optional(),
   resolutionDetails: z.string().nullable().optional(),
 });
