@@ -16,6 +16,7 @@ import {
   Headphones,
   LogOut,
   UserRoundCog,
+  ClipboardPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ const secondaryNavItems = [
   { icon: BarChart3, label: "דוחות", href: "/reports" },
   { icon: Settings, label: "הגדרות", href: "/settings" },
   { icon: UserRoundCog, label: "ניהול", href: "/admin" },
+  { icon: ClipboardPlus, label: "טופס חיצוני (דמו)", href: "/public/new"}
 ];
 
 export function Sidebar() {
