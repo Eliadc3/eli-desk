@@ -8,6 +8,7 @@ import { Ticket, AlertTriangle, Clock, Timer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSummary } from "@/api/dashboard";
 
+
 function formatAvgResponse(minutes: number | null): string {
   if (minutes === null || Number.isNaN(minutes)) return "—";
   const hours = minutes / 60;

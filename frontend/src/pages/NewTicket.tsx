@@ -3,41 +3,108 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState } from "react";
-import { createTicket } from "@/api/tickets";
+import { useEffect, useMemo, useState } from "react";
+import { createTicket, getNextTicketNumber } from "@/api/tickets";
 import { listHospitalDepartments } from "@/api/departments";
+import { listTicketPriorities, listTicketStatuses } from "@/api/meta";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
+
+type DeptLite = { id: string; name: string };
+
 export default function NewTicket() {
-  const [subject, setSubject] = useState("");
-  const [description, setDescription] = useState("");
-  const [hospitalDepartmentId, setHospitalDepartmentId] = useState("");
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-  const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
   const nav = useNavigate();
+  const { toast } = useToast();
+
+  const [previewNumber, setPreviewNumber] = useState<number | null>(null);
+  const [departments, setDepartments] = useState<DeptLite[]>([]);
+  const [statuses, setStatuses] = useState<string[]>([]);
+  const [priorities, setPriorities] = useState<string[]>([]);
+
+  // Working copy (NOT persisted until Save)
+  const [draft, setDraft] = useState({
+    externalRequesterName: "",
+    externalRequesterPhone: "",
+    hospitalDepartmentId: "",
+    subject: "",
+    description: "",
+    status: "NEW",
+    priority: "MEDIUM",
+  });
+
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const d = await listHospitalDepartments();
-      setDepartments(d.map((x) => ({ id: x.id, name: x.name })));
-      if (d.length) setHospitalDepartmentId(d[0].id);
+      try {
+        const [num, depts, st, pr] = await Promise.all([
+          getNextTicketNumber(),
+          listHospitalDepartments(),
+          listTicketStatuses(),
+          listTicketPriorities(),
+        ]);
+        setPreviewNumber(num);
+        setDepartments(depts.map((x) => ({ id: x.id, name: x.name })));
+        setStatuses(st);
+        setPriorities(pr);
+
+        setDraft((d) => ({
+          ...d,
+          hospitalDepartmentId: d.hospitalDepartmentId || (depts[0]?.id ?? ""),
+          status: d.status || (st.includes("NEW") ? "NEW" : st[0] ?? "NEW"),
+          priority: d.priority || (pr.includes("MEDIUM") ? "MEDIUM" : pr[0] ?? "MEDIUM"),
+        }));
+      } catch (e: any) {
+        toast({
+          title: "Failed to load",
+          description: e?.response?.data?.message ?? e?.message ?? "Unknown error",
+          variant: "destructive",
+        });
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onSubmit = async () => {
-    if (!subject.trim() || !description.trim() || !hospitalDepartmentId) {
-      toast({ title: "Missing fields", description: "Department, subject and description are required", variant: "destructive" });
+  const deptName = useMemo(() => {
+    return departments.find((d) => d.id === draft.hospitalDepartmentId)?.name ?? "";
+  }, [departments, draft.hospitalDepartmentId]);
+
+  const onCancel = () => {
+    // Rollback: no API call.
+    nav("/tickets");
+  };
+
+  const onSave = async () => {
+    if (!draft.hospitalDepartmentId || !draft.subject.trim() || !draft.description.trim()) {
+      toast({
+        title: "חסרים שדות חובה",
+        description: "מחלקה, נושא ותיאור הם חובה.",
+        variant: "destructive",
+      });
       return;
     }
+
     setBusy(true);
     try {
-      const created = await createTicket({ hospitalDepartmentId, subject, description });
-      toast({ title: "Ticket created" });
-      nav(`/tickets/${created.ticket?.id ?? created.id ?? ""}`);
+      const created = await createTicket({
+        hospitalDepartmentId: draft.hospitalDepartmentId,
+        subject: draft.subject,
+        description: draft.description,
+        status: draft.status as any,
+        priority: draft.priority as any,
+        externalRequesterName: draft.externalRequesterName || undefined,
+        externalRequesterPhone: draft.externalRequesterPhone || undefined,
+      });
+
+      toast({ title: "נשמר" });
+      nav(`/tickets/${created.id}`);
     } catch (e: any) {
-      toast({ title: "Create failed", description: e?.response?.data?.message ?? e?.message ?? "Unknown error", variant: "destructive" });
+      toast({
+        title: "שמירה נכשלה",
+        description: e?.response?.data?.message ?? e?.message ?? "Unknown error",
+        variant: "destructive",
+      });
     } finally {
       setBusy(false);
     }
@@ -45,34 +112,114 @@ export default function NewTicket() {
 
   return (
     <MainLayout>
-      <div className="max-w-2xl mx-auto space-y-4">
+      <div className="max-w-3xl mx-auto space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Create Ticket</CardTitle>
+            <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+              <div>פתיחת קריאה (טכנאי)</div>
+              <div className="text-sm text-muted-foreground">
+                מספר קריאה: <span className="font-bold">{previewNumber ?? "…"}</span>
+              </div>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm">Hospital Department *</label>
-              <select className="w-full border rounded-md p-2 bg-background" value={hospitalDepartmentId} onChange={(e) => setHospitalDepartmentId(e.target.value)}>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm">שם פותח הקריאה (לקוח)</label>
+                <Input
+                  value={draft.externalRequesterName}
+                  onChange={(e) => setDraft((d) => ({ ...d, externalRequesterName: e.target.value }))}
+                  placeholder="שם מלא"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm">טלפון</label>
+                <Input
+                  value={draft.externalRequesterPhone}
+                  onChange={(e) => setDraft((d) => ({ ...d, externalRequesterPhone: e.target.value }))}
+                  placeholder="טלפון"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm">מחלקה מדווחת *</label>
+                <select
+                  className="w-full border rounded-md p-2 bg-background"
+                  value={draft.hospitalDepartmentId}
+                  onChange={(e) => setDraft((d) => ({ ...d, hospitalDepartmentId: e.target.value }))}
+                >
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                {!!deptName && <div className="text-xs text-muted-foreground">{deptName}</div>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-sm">סטטוס</label>
+                  <select
+                    className="w-full border rounded-md p-2 bg-background"
+                    value={draft.status}
+                    onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
+                  >
+                    {statuses.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm">עדיפות</label>
+                  <select
+                    className="w-full border rounded-md p-2 bg-background"
+                    value={draft.priority}
+                    onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}
+                  >
+                    {priorities.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm">Subject *</label>
-              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short title" />
+              <label className="text-sm">נושא *</label>
+              <Input
+                value={draft.subject}
+                onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+                placeholder="כותרת קצרה"
+              />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm">Description *</label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the issue" rows={6} />
+              <label className="text-sm">תיאור *</label>
+              <Textarea
+                value={draft.description}
+                onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                placeholder="תאר את התקלה"
+                rows={7}
+              />
             </div>
 
-            <Button onClick={onSubmit} disabled={busy}>
-              {busy ? "Creating..." : "Create"}
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={onSave} disabled={busy}>
+                {busy ? "שומר..." : "Save"}
+              </Button>
+              <Button variant="outline" onClick={onCancel} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

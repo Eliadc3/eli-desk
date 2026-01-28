@@ -12,6 +12,8 @@ import Admin from "./pages/Admin";
 import TicketDetail from "./pages/TicketDetail";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import PublicTicketCreated from "./pages/publicTicketCreated";
+
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,8 @@ const App = () => (
 
           {/* Public */}
           <Route path="/public/new" element={<PublicNewTicket />} />
+          <Route path="/ticketcreated" element={<PublicTicketCreated />} />
+
 
           {/* Auth */}
           <Route path="/login" element={<Login />} />

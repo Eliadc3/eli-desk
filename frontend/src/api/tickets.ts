@@ -53,14 +53,24 @@ export async function createTicket(payload: {
   priority?: TicketPriority;
   requesterId?: string;
   assigneeId?: string;
+  status?: TicketStatus;
+  externalRequesterName?: string;
+  externalRequesterEmail?: string;
+  externalRequesterPhone?: string;
 }) {
   const { data } = await api.post("/tickets", payload);
   return data;
 }
 
 export async function updateTicket(id: string, payload: any) {
-  const { data } = await api.patch(`/tickets/${id}`, payload);
-  return data;
+  const res = await api.patch(`/tickets/${id}`, payload);
+  return res.data;
+}
+
+
+export async function getNextTicketNumber() {
+  const { data } = await api.get("/meta/ticket-next-number");
+  return data.number as number;
 }
 
 export async function createPublicTicket(payload: {

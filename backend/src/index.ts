@@ -17,6 +17,8 @@ import { publicRouter } from "./routes/public.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { metaRouter } from "./routes/meta.js";
 
+
+
 const app = express();
 
 app.use(helmet());
@@ -66,4 +68,46 @@ app.use(errorHandler);
 
 app.listen(env.PORT, () => {
   console.log(`eli-desk-backend running on http://localhost:${env.PORT}`);
+});
+
+
+import { ZodError } from "zod";
+import { HttpError } from "./lib/httpError.js";
+
+app.use((err: any, req: any, res: any, next: any) => {
+  // Zod validation errors -> 400 with details
+  if (err instanceof ZodError) {
+    const issues = err.issues.map(i => ({
+      path: i.path.join("."),
+      message: i.message,
+    }));
+
+    return res.status(400).json({
+      message: issues.map(x => `${x.path}: ${x.message}`).join(" | "),
+      code: "VALIDATION_ERROR",
+      issues,
+    });
+  }
+
+  // Your typed HTTP errors
+  if (err instanceof HttpError) {
+    return res.status(err.status).json({
+      message: err.message,
+      code: "HTTP_ERROR",
+    });
+  }
+
+  // Prisma common case (optional but useful)
+  if (err?.name === "PrismaClientKnownRequestError") {
+    return res.status(400).json({
+      message: err.message,
+      code: "PRISMA_ERROR",
+    });
+  }
+
+  console.error(err);
+  return res.status(500).json({
+    message: "Internal Server Error",
+    code: "INTERNAL_SERVER_ERROR",
+  });
 });

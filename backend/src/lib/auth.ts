@@ -9,7 +9,7 @@ export type JwtPayload = {
 };
 
 export function signAccessToken(payload: JwtPayload) {
-  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: "30m" });
+  return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn: "14d" });
 }
 
 export function signRefreshToken(payload: JwtPayload) {

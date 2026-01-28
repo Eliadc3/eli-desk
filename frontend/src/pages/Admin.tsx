@@ -29,18 +29,32 @@ export default function Admin() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [techs, setTechs] = useState<any[]>([]);
   const [newDeptName, setNewDeptName] = useState("");
-  const [newDeptType, setNewDeptType] = useState<"TECH"|"HOSPITAL">("HOSPITAL");
+  const [newDeptType, setNewDeptType] = useState<"TECH" | "HOSPITAL">("HOSPITAL");
 
   const [newTech, setNewTech] = useState({ email: "", name: "", password: "", techDepartmentId: "" });
-  const [techDepts, setTechDepts] = useState<{id:string;name:string}[]>([]);
+  const [techDepts, setTechDepts] = useState<{ id: string; name: string }[]>([]);
+
+
+  const [permDraft, setPermDraft] = useState<Record<string, Permission[]>>({});
+  const [permDirty, setPermDirty] = useState<Record<string, boolean>>({});
 
   const refresh = async () => {
     if (canDept) setDepartments(await listDepartments());
     if (canTech) {
-      setTechs(await listTechnicians());
-      const td = await listTechDepartments();
-      setTechDepts(td.map((x) => ({ id: x.id, name: x.name })));
-    }
+  const list = await listTechnicians();
+  setTechs(list);
+
+  const init: Record<string, Permission[]> = {};
+  for (const t of list) {
+    init[t.id] = (t.permissions ?? []).map((x: any) => x.perm);
+  }
+  setPermDraft(init);
+  setPermDirty({});
+
+  const td = await listTechDepartments();
+  setTechDepts(td.map((x) => ({ id: x.id, name: x.name })));
+}
+
   };
 
   useEffect(() => { refresh(); }, []);
@@ -66,7 +80,7 @@ export default function Admin() {
                   <CardHeader><CardTitle>Create Department</CardTitle></CardHeader>
                   <CardContent className="flex flex-col md:flex-row gap-3">
                     <Input placeholder="Name" value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} />
-                    <select className="border rounded-md p-2 bg-background" value={newDeptType} onChange={(e)=>setNewDeptType(e.target.value as any)}>
+                    <select className="border rounded-md p-2 bg-background" value={newDeptType} onChange={(e) => setNewDeptType(e.target.value as any)}>
                       <option value="HOSPITAL">Hospital</option>
                       <option value="TECH">Tech</option>
                     </select>
@@ -77,8 +91,8 @@ export default function Admin() {
                         setNewDeptName("");
                         await refresh();
                         toast({ title: "Department created" });
-                      } catch (e:any) {
-                        toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
+                      } catch (e: any) {
+                        toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
                       }
                     }}>Add</Button>
                   </CardContent>
@@ -96,14 +110,14 @@ export default function Admin() {
                         <Button variant="outline" onClick={async () => {
                           const name = prompt("New name", d.name);
                           if (!name) return;
-                          try { await patchDepartment(d.id, { name }); await refresh(); } catch (e:any) {
-                            toast({ title:"Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
+                          try { await patchDepartment(d.id, { name }); await refresh(); } catch (e: any) {
+                            toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
                           }
                         }}>Rename</Button>
                         <Button variant="destructive" onClick={async () => {
                           if (!confirm("Delete department?")) return;
-                          try { await deleteDepartment(d.id); await refresh(); } catch (e:any) {
-                            toast({ title:"Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
+                          try { await deleteDepartment(d.id); await refresh(); } catch (e: any) {
+                            toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
                           }
                         }}>Delete</Button>
                       </div>
@@ -122,30 +136,39 @@ export default function Admin() {
                 <Card>
                   <CardHeader><CardTitle>Create Technician</CardTitle></CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <Input placeholder="Email" value={newTech.email} onChange={(e)=>setNewTech({...newTech,email:e.target.value})}/>
-                    <Input placeholder="Name" value={newTech.name} onChange={(e)=>setNewTech({...newTech,name:e.target.value})}/>
-                    <Input placeholder="Password" type="password" value={newTech.password} onChange={(e)=>setNewTech({...newTech,password:e.target.value})}/>
-                    <select className="border rounded-md p-2 bg-background" value={newTech.techDepartmentId} onChange={(e)=>setNewTech({...newTech,techDepartmentId:e.target.value})}>
+                    <Input placeholder="Email" value={newTech.email} onChange={(e) => setNewTech({ ...newTech, email: e.target.value })} />
+                    <Input placeholder="Name" value={newTech.name} onChange={(e) => setNewTech({ ...newTech, name: e.target.value })} />
+                    <Input placeholder="Password" type="password" value={newTech.password} onChange={(e) => setNewTech({ ...newTech, password: e.target.value })} />
+                    <select className="border rounded-md p-2 bg-background" value={newTech.techDepartmentId} onChange={(e) => setNewTech({ ...newTech, techDepartmentId: e.target.value })}>
                       <option value="">(Tech department)</option>
-                      {techDepts.map((d)=> <option key={d.id} value={d.id}>{d.name}</option>)}
+                      {techDepts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
 
                     <div className="md:col-span-4 border rounded-md p-3 space-y-2">
                       <div className="text-sm font-medium">Extra permissions</div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        {PERMS.map((p) => (
-                          <label key={p.key} className="flex items-center gap-2 text-sm">
-                            <Checkbox
-                              checked={(newTech as any).permissions?.includes(p.key) ?? false}
-                              onCheckedChange={(v) => {
-                                const arr: Permission[] = (newTech as any).permissions ?? [];
-                                const next = v ? Array.from(new Set([...arr, p.key])) : arr.filter((x) => x !== p.key);
-                                setNewTech({ ...(newTech as any), permissions: next });
-                              }}
-                            />
-                            {p.label}
-                          </label>
-                        ))}
+                        {PERMS.map((p) => {
+                          const current: Permission[] = (newTech as any).permissions ?? [];
+                          const checked = current.includes(p.key);
+
+                          return (
+                            <label key={p.key} className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  const next = v
+                                    ? Array.from(new Set([...current, p.key]))
+                                    : current.filter((x) => x !== p.key);
+
+                                  setNewTech({ ...(newTech as any), permissions: next } as any);
+                                }}
+                              />
+                              {p.label}
+                            </label>
+                          );
+                        })}
+
+
                       </div>
                     </div>
 
@@ -158,11 +181,11 @@ export default function Admin() {
                           techDepartmentId: newTech.techDepartmentId || null,
                           permissions: (newTech as any).permissions ?? [],
                         });
-                        setNewTech({ email:"", name:"", password:"", techDepartmentId:"" } as any);
+                        setNewTech({ email: "", name: "", password: "", techDepartmentId: "" } as any);
                         await refresh();
                         toast({ title: "Technician created" });
-                      } catch (e:any) {
-                        toast({ title:"Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
+                      } catch (e: any) {
+                        toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
                       }
                     }}>Add technician</Button>
                   </CardContent>
@@ -181,35 +204,72 @@ export default function Admin() {
                           <Button variant="outline" onClick={async () => {
                             const name = prompt("New name", t.name);
                             if (!name) return;
-                            try { await patchTechnician(t.id, { name }); await refresh(); } catch(e:any){
-                              toast({ title:"Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
+                            try { await patchTechnician(t.id, { name }); await refresh(); } catch (e: any) {
+                              toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
                             }
                           }}>Rename</Button>
                           <Button variant="destructive" onClick={async () => {
                             if (!confirm("Delete technician?")) return;
-                            try { await deleteTechnician(t.id); await refresh(); } catch(e:any){
-                              toast({ title:"Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
+                            try { await deleteTechnician(t.id); await refresh(); } catch (e: any) {
+                              toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
                             }
                           }}>Delete</Button>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                           {PERMS.map((p) => {
-                            const checked = (t.permissions ?? []).some((x:any)=>x.perm===p.key);
+                            const draftPerms = permDraft[t.id] ?? [];
+                            const checked = draftPerms.includes(p.key);
+
                             return (
                               <label key={p.key} className="flex items-center gap-2 text-sm">
-                                <Checkbox checked={checked} onCheckedChange={async (v) => {
-                                  const current: Permission[] = (t.permissions ?? []).map((x:any)=>x.perm);
-                                  const next = v ? Array.from(new Set([...current, p.key])) : current.filter((x)=>x!==p.key);
-                                  try { await patchTechnician(t.id, { permissions: next }); await refresh(); } catch(e:any){
-                                    toast({ title:"Failed", description: e?.response?.data?.message ?? e?.message, variant:"destructive" });
-                                  }
-                                }} />
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => {
+                                    const next = v
+                                      ? Array.from(new Set([...draftPerms, p.key]))
+                                      : draftPerms.filter((x) => x !== p.key);
+
+                                    setPermDraft((prev) => ({ ...prev, [t.id]: next }));
+                                    setPermDirty((prev) => ({ ...prev, [t.id]: true }));
+                                  }}
+                                />
                                 {p.label}
                               </label>
                             );
                           })}
+
                         </div>
+                        <div className="flex gap-2">
+                          <Button
+                            disabled={!permDirty[t.id]}
+                            onClick={async () => {
+                              try {
+                                await patchTechnician(t.id, { permissions: permDraft[t.id] ?? [] });
+                                await refresh();
+                                toast({ title: "Permissions saved" });
+                              } catch (e: any) {
+                                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                              }
+                            }}
+                          >
+                            Save
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            disabled={!permDirty[t.id]}
+                            onClick={() => {
+                              const original = (t.permissions ?? []).map((x: any) => x.perm);
+                              setPermDraft((prev) => ({ ...prev, [t.id]: original }));
+                              setPermDirty((prev) => ({ ...prev, [t.id]: false }));
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+
+
                       </div>
                     ))}
                   </CardContent>

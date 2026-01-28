@@ -13,14 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getTicket, updateTicket } from "@/api/tickets";
 import {
   duplicateTicket,
   deleteTicket,
-  reassignTicket,
   listAssignees,
   type AssigneeLite,
 } from "@/api/admin";
@@ -35,15 +34,17 @@ import {
   Phone,
   BadgeCheck,
   AlertTriangle,
-  ArrowLeft,
   Copy,
   Trash2,
+  Printer,
+  Save,
+  ArrowRight,
+  X,
 } from "lucide-react";
 import { listTicketStatuses } from "@/api/meta";
 import { printTicketLabel } from "@/lib/printTicketLabel";
 import { listHospitalDepartments } from "@/api/departments";
-
-const STATUS_STALE_TIME = 1000 * 60 * 60;
+import { translateBackendError } from "@/utils/backendErrorTranslator";
 
 
 function statusTone(s: string) {
@@ -89,20 +90,44 @@ function formatRequester(t: any) {
   return t.requester?.name || t.requester?.email || "—";
 }
 
+function makeDraftFromTicket(t: any) {
+  return {
+    subject: t.subject ?? "",
+    description: t.description ?? "",
+    status: t.status ?? "",
+    priority: t.priority ?? "",
+    assigneeId: t.assigneeId ?? "",
+    hospitalDepartmentId: t.hospitalDepartmentId ?? "",
+    // שדות ציבוריים (אם זה PUBLIC)
+    externalRequesterName: t.externalRequesterName ?? "",
+    externalRequesterEmail: t.externalRequesterEmail ?? "",
+    externalRequesterPhone: t.externalRequesterPhone ?? "",
+    // פנימיים
+    notes: t.notes ?? "",
+    resolutionSummary: t.resolutionSummary ?? "",
+    resolutionDetails: t.resolutionDetails ?? "",
+  };
+}
+
 export default function TicketDetail() {
   const { id } = useParams();
   const nav = useNavigate();
   const { me } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const statusesQ = useQuery({
     queryKey: ["meta-ticket-statuses"],
     queryFn: () => listTicketStatuses(),
     staleTime: 1000 * 60 * 60,
   });
-
   const STATUSES = (statusesQ.data ?? []) as string[];
 
+  const deptsQ = useQuery({
+    queryKey: ["meta-hospital-departments"],
+    queryFn: listHospitalDepartments,
+    staleTime: 1000 * 60 * 60,
+  });
 
   const q = useQuery({
     queryKey: ["ticket", id],
@@ -112,108 +137,94 @@ export default function TicketDetail() {
 
   const t = q.data as any;
 
-const deptsQ = useQuery({
-  queryKey: ["meta-hospital-departments"],
-  queryFn: listHospitalDepartments,
-  staleTime: 1000 * 60 * 60,
-});
+  const [draft, setDraft] = useState<any>(null);
 
-const departmentName =
-  (deptsQ.data ?? []).find(d => d.id === t?.hospitalDepartmentId)?.name ?? "—";
-
+  useEffect(() => {
+    if (!t) return;
+    setDraft(makeDraftFromTicket(t));
+  }, [t]);
 
   const canDelete = hasAnyPermission(me, ["TICKET_DELETE"]);
   const canDup = hasAnyPermission(me, ["TICKET_DUPLICATE"]);
   const canReassign = hasAnyPermission(me, ["TICKET_REASSIGN"]);
-  const canChangeStatus = !!me && me.role !== "CUSTOMER";
+  const canEdit = !!me && me.role !== "CUSTOMER"; // לקוח לא עורך פרטי קריאה מלאים
 
   const assigneesQ = useQuery({
     queryKey: ["assignees-lite"],
     queryFn: () => listAssignees(),
     enabled: !!id && canReassign,
   });
-
   const assignees = (assigneesQ.data ?? []) as AssigneeLite[];
-
-  const [resolutionSummary, setResolutionSummary] = useState("");
-  const [resolutionDetails, setResolutionDetails] = useState("");
-
-  const [notes, setNotes] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>("");
-
-  useEffect(() => {
-    if (!t) return;
-    setResolutionSummary(t.resolutionSummary ?? "");
-    setResolutionDetails(t.resolutionDetails ?? "");
-    setNotes(t.notes ?? "");
-    setSelectedStatus(t.status ?? "");
-    setSelectedAssigneeId(t.assigneeId ?? "");
-  }, [t]);
 
   const currentAssigneeLabel = useMemo(() => {
     if (!t?.assignee?.name) return "Unassigned";
     return t.assignee.name;
   }, [t]);
 
-  const onSaveResolution = async () => {
-    try {
-      await updateTicket(String(id), { resolutionSummary, resolutionDetails });
+  const departmentName =
+    (deptsQ.data ?? []).find((d: any) => d.id === t?.hospitalDepartmentId)?.name ?? "—";
+
+  const saveM = useMutation({
+    mutationFn: (payload: any) => updateTicket(String(id), payload),
+    onSuccess: async () => {
+      // ✅ Save = Commit + refresh from server so draft matches DB
+      await queryClient.invalidateQueries({ queryKey: ["ticket", id] });
+      await q.refetch();
       toast({ title: "Saved" });
-      q.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Failed",
-        description: e?.response?.data?.message ?? e?.message,
-        variant: "destructive",
-      });
-    }
-  };
+    },
+    onError: (e: any) => {
+  const status = e?.response?.status;
+  const data = e?.response?.data;
 
-  const onSaveNotes = async () => {
-    try {
-      await updateTicket(String(id), { notes });
-      toast({ title: "Notes saved" });
-      q.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Failed",
-        description: e?.response?.data?.message ?? e?.message,
-        variant: "destructive",
-      });
-    }
-  };
+  let rawMsg: string | null = null;
 
-  const onChangeStatus = async (next: string) => {
-    try {
-      setSelectedStatus(next);
-      await updateTicket(String(id), { status: next });
-      toast({ title: "Status updated" });
-      q.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Failed",
-        description: e?.response?.data?.message ?? e?.message,
-        variant: "destructive",
-      });
-      setSelectedStatus(t?.status ?? "");
+  if (data && typeof data === "object") {
+    if (typeof data.error === "string") rawMsg = data.error;
+    else if (typeof data.message === "string") rawMsg = data.message;
+    else if (Array.isArray((data as any).issues)) {
+      rawMsg = (data as any).issues
+        .map((x: any) => `${x.path}: ${x.message}`)
+        .join("\n");
     }
-  };
+  }
 
-  const onReassign = async (assigneeId: string | null) => {
-    try {
-      await reassignTicket(String(id), assigneeId ?? "");
-      toast({ title: "Reassigned" });
-      q.refetch();
-    } catch (e: any) {
-      toast({
-        title: "Failed",
-        description: e?.response?.data?.message ?? e?.message,
-        variant: "destructive",
-      });
-      setSelectedAssigneeId(t?.assigneeId ?? "");
-    }
-  };
+  if (!rawMsg && typeof data === "string") rawMsg = data;
+  if (!rawMsg) rawMsg = e?.message ?? "שגיאה לא ידועה";
+
+  toast({
+    title: `שמירה נכשלה${status ? ` (${status})` : ""}`,
+    description: translateBackendError(rawMsg),
+    variant: "destructive",
+  });
+},
+
+
+
+
+  });
+
+
+  const isClosingStatus = (s: string) => ["RESOLVED", "CLOSED"].includes((s ?? "").toUpperCase());
+
+function validateBeforeSave(d: any): string | null {
+  const status = (d?.status ?? "").toUpperCase();
+
+  // אם לא סוגרים/פותרים – לא מחייבים פתרון בכלל
+  if (!isClosingStatus(status)) return null;
+
+  const summary = (d?.resolutionSummary ?? "").trim();
+  const details = (d?.resolutionDetails ?? "").trim();
+
+  // אופציה A (מומלץ): מחייבים רק Summary
+  if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
+
+  // אופציה B (מחמיר): מחייבים גם Summary וגם Details
+  // if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
+  // if (details.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'פתרון מורחב' (לפחות 4 תווים).";
+
+  return null;
+}
+
 
   if (q.isLoading) {
     return (
@@ -233,13 +244,6 @@ const departmentName =
 
   const statusBadgeClass = statusTone(t.status);
   const priorityBadgeClass = priorityTone(t.priority);
-  console.log("Rendering ticket detail for", t);
-
-  console.log("dept debug", {
-  ticketDeptId: t?.hospitalDepartmentId,
-  deptsCount: (deptsQ.data ?? []).length,
-  firstDept: (deptsQ.data ?? [])[0],
-});
 
   return (
     <MainLayout>
@@ -272,16 +276,64 @@ const departmentName =
                   )}
                 </div>
 
-                <div className="mt-1 text-sm text-muted-foreground truncate">
+                <div className="mt-1 truncate text-muted-foreground ">
                   {t.subject}
                 </div>
               </div>
 
-              <div className="flex gap-2 flex-wrap">
-                <Button variant="outline" onClick={() => nav("/tickets")} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back
-                </Button>
+              <div className="grid mt-3 flex items-center gap-3 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
+                  <Button variant="outline" onClick={() => nav("/tickets")} className="gap-2">
+                    חזור
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+
+                  {canEdit && (
+                    <>
+                      <Button
+                        disabled={!draft || saveM.isPending}
+                        onClick={() => {
+                          if (!draft) return;
+
+                          const err = validateBeforeSave(draft);
+                          if (err) {
+                            toast({ title: "Cannot save", description: err, variant: "destructive" });
+                            return;
+                          }
+
+                          saveM.mutate({
+                            subject: draft.subject,
+                            description: draft.description,
+                            status: draft.status,
+                            priority: draft.priority,
+                            assigneeId: draft.assigneeId || null,
+                            hospitalDepartmentId: draft.hospitalDepartmentId || null,
+                            notes: draft.notes,
+                            resolutionSummary: draft.resolutionSummary,
+                            resolutionDetails: draft.resolutionDetails,
+                            externalRequesterName: draft.externalRequesterName,
+                            externalRequesterEmail: draft.externalRequesterEmail,
+                            externalRequesterPhone: draft.externalRequesterPhone,
+                          });
+                        }}
+                      >
+                        שמור
+                        <Save className="h-4 w-4 mr-1" />
+                      </Button>
+
+
+                      <Button
+                        variant="outline"
+                        disabled={!draft || saveM.isPending}
+                        onClick={() => setDraft(makeDraftFromTicket(t))}
+                        className="gap-2"
+                      >
+                        ביטול
+                        <X className="h-4 w-4 mr-1" />
+                      </Button>
+                    </>
+                  )}
+                </div>
 
                 {canDup && (
                   <Button
@@ -301,11 +353,12 @@ const departmentName =
                       }
                     }}
                   >
+                    שכפל קריאה
                     <Copy className="h-4 w-4" />
-                    Duplicate
                   </Button>
                 )}
-                <button
+
+                <Button
                   onClick={() => {
                     if (!t) return;
 
@@ -322,8 +375,8 @@ const departmentName =
                   className="bg-blue-600 text-white px-3 py-1 rounded"
                 >
                   הדפס מדבקה
-                </button>
-
+                  <Printer className="h-4 w-4 mr-1" />
+                </Button>
 
                 {canDelete && (
                   <Button
@@ -344,8 +397,8 @@ const departmentName =
                       }
                     }}
                   >
+                    מחיקת הקריאה
                     <Trash2 className="h-4 w-4" />
-                    Delete
                   </Button>
                 )}
               </div>
@@ -360,11 +413,8 @@ const departmentName =
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="h-5 w-5" />
-                Details
+                פרטים
               </CardTitle>
-              <CardDescription>
-                Status, assignment, requester and metadata
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4">
@@ -373,10 +423,12 @@ const departmentName =
                 <div className="grid grid-cols-1 gap-3">
                   <div className="space-y-2">
                     <div className="text-xs font-medium text-muted-foreground">STATUS</div>
-                    {canChangeStatus ? (
+                    {canEdit ? (
                       <Select
-                        value={selectedStatus || t.status}
-                        onValueChange={(v) => onChangeStatus(v as any)}
+                        value={draft?.status ?? t.status}
+                        onValueChange={(v) =>
+                          setDraft((prev: any) => ({ ...prev, status: v }))
+                        }
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select status" />
@@ -384,7 +436,7 @@ const departmentName =
                         <SelectContent>
                           {statusesQ.isLoading && (
                             <SelectItem value="__loading__" disabled>
-                              Loading...
+                              טוען...
                             </SelectItem>
                           )}
 
@@ -395,7 +447,6 @@ const departmentName =
                               </SelectItem>
                             ))}
                         </SelectContent>
-
                       </Select>
                     ) : (
                       <div className="text-sm">{t.status}</div>
@@ -407,11 +458,13 @@ const departmentName =
 
                     {canReassign ? (
                       <Select
-                        value={selectedAssigneeId ?? ""}
-                        onValueChange={(v) => {
-                          setSelectedAssigneeId(v);
-                          onReassign(v === "__none__" ? null : v);
-                        }}
+                        value={draft?.assigneeId ?? ""}
+                        onValueChange={(v) =>
+                          setDraft((prev: any) => ({
+                            ...prev,
+                            assigneeId: v === "__none__" ? "" : v,
+                          }))
+                        }
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select technician" />
@@ -434,7 +487,7 @@ const departmentName =
 
                     {canReassign && (
                       <div className="text-[11px] text-muted-foreground">
-                        Changing assignee requires <b>TICKET_REASSIGN</b>.
+                        שינוי הטכנאי נשמר רק בלחיצה על <b>שמור</b>.
                       </div>
                     )}
                   </div>
@@ -448,32 +501,95 @@ const departmentName =
                 <div className="flex items-start gap-2">
                   <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">HOSPITAL DEPARTMENT</div>
-                    <div className="font-medium truncate">{t.hospitalDepartment?.name ?? "—"}</div>
+                    <div className="text-xs mb-1 text-muted-foreground">מחלקה מדווחת</div>
+
+                    {/* ✅ עכשיו עריך באמת (draft) */}
+                    {canEdit ? (
+                      <Select
+                        value={draft?.hospitalDepartmentId ?? t.hospitalDepartmentId ?? ""}
+                        onValueChange={(v) =>
+                          setDraft((prev: any) => ({ ...prev, hospitalDepartmentId: v }))
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="בחר מחלקה" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(deptsQ.data ?? []).map((d: any) => (
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="font-medium truncate">
+                        {t.hospitalDepartment?.name ?? departmentName}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-start gap-2">
                   <UserRound className="h-4 w-4 text-muted-foreground mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">REQUESTER</div>
-                    <div className="font-medium break-words">{formatRequester(t)}</div>
+                  <div className="min-w-0 w-full">
+                    <div className="text-xs mb-1 text-muted-foreground">פותח הקריאה</div>
 
-                    {t.source === "PUBLIC" && (
-                      <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                        {t.externalRequesterEmail && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-3.5 w-3.5" />
-                            <span className="break-all">{t.externalRequesterEmail}</span>
-                          </div>
-                        )}
-                        {t.externalRequesterPhone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span>{t.externalRequesterPhone}</span>
-                          </div>
-                        )}
+                    {/* ✅ פנימי יכול לערוך פרטי פותח; ציבורי מוצג */}
+                    {canEdit ? (
+                      <div className="space-y-2">
+                        <Input
+                          value={draft?.externalRequesterName ?? ""}
+                          onChange={(e) =>
+                            setDraft((prev: any) => ({
+                              ...prev,
+                              externalRequesterName: e.target.value,
+                            }))
+                          }
+                          placeholder="שם פותח הקריאה"
+                        />
+                        <Input
+                          value={draft?.externalRequesterEmail ?? ""}
+                          onChange={(e) =>
+                            setDraft((prev: any) => ({
+                              ...prev,
+                              externalRequesterEmail: e.target.value,
+                            }))
+                          }
+                          placeholder="אימייל"
+                        />
+                        <Input
+                          value={draft?.externalRequesterPhone ?? ""}
+                          onChange={(e) =>
+                            setDraft((prev: any) => ({
+                              ...prev,
+                              externalRequesterPhone: e.target.value,
+                            }))
+                          }
+                          placeholder="טלפון"
+                        />
                       </div>
+                    ) : (
+                      <>
+                        <div className="font-medium break-words">{formatRequester(t)}</div>
+
+                        {t.source === "PUBLIC" && (
+                          <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                            {t.externalRequesterEmail && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-3.5 w-3.5" />
+                                <span className="break-all">{t.externalRequesterEmail}</span>
+                              </div>
+                            )}
+                            {t.externalRequesterPhone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-3.5 w-3.5" />
+                                <span>{t.externalRequesterPhone}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -481,10 +597,10 @@ const departmentName =
                 <div className="flex items-start gap-2">
                   <CalendarDays className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div className="min-w-0">
-                    <div className="text-xs text-muted-foreground">CREATED</div>
-                    <div className="font-medium">{new Date(t.createdAt).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">נפתחה ב:</div>
+                    <div className="font-medium">{new Date(t.createdAt).toLocaleString("he")}</div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Updated: {new Date(t.updatedAt).toLocaleString()}
+                      עודכן: {new Date(t.updatedAt).toLocaleString("he")}
                     </div>
                   </div>
                 </div>
@@ -496,69 +612,61 @@ const departmentName =
           <div className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Ticket Content</CardTitle>
-                <CardDescription>
-                  The original description reported for this ticket
-                </CardDescription>
+                <CardTitle>תוכן הקריאה</CardTitle>
+                <CardDescription>נערך ונשמר רק בלחיצה על “שמור”</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="rounded-xl border bg-card p-4">
-                  <div className="text-sm whitespace-pre-wrap leading-6">
-                    {t.description ?? "—"}
-                  </div>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">נושא</label>
+                  <Input
+                    disabled={!canEdit}
+                    value={draft?.subject ?? ""}
+                    onChange={(e) =>
+                      setDraft((prev: any) => ({ ...prev, subject: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">תיאור</label>
+                  <Textarea
+                    disabled={!canEdit}
+                    value={draft?.description ?? ""}
+                    onChange={(e) =>
+                      setDraft((prev: any) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={10}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Resolution</CardTitle>
-                <CardDescription>Summary + details (internal)</CardDescription>
+                <CardTitle>פתרון</CardTitle>
+                <CardDescription>סיכום + פרטים (פנימי) — נשמר רק בלחיצה על “שמור”</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      SUMMARY
-                    </label>
-                    <Input
-                      value={resolutionSummary}
-                      onChange={(e) => setResolutionSummary(e.target.value)}
-                      placeholder="Short outcome..."
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      QUICK ACTION
-                    </label>
-                    <div className="flex gap-2">
-                      <Button className="w-full" onClick={onSaveResolution}>
-                        Save
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => {
-                          setResolutionSummary(t.resolutionSummary ?? "");
-                          setResolutionDetails(t.resolutionDetails ?? "");
-                        }}
-                      >
-                        Reset
-                      </Button>
-                    </div>
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">סיכום</label>
+                  <Input
+                    disabled={!canEdit}
+                    value={draft?.resolutionSummary ?? ""}
+                    onChange={(e) =>
+                      setDraft((prev: any) => ({ ...prev, resolutionSummary: e.target.value }))
+                    }
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    DETAILS
-                  </label>
+                  <label className="text-xs font-medium text-muted-foreground">פתרון מורחב</label>
                   <Textarea
-                    value={resolutionDetails}
-                    onChange={(e) => setResolutionDetails(e.target.value)}
+                    disabled={!canEdit}
+                    value={draft?.resolutionDetails ?? ""}
+                    onChange={(e) =>
+                      setDraft((prev: any) => ({ ...prev, resolutionDetails: e.target.value }))
+                    }
                     rows={7}
-                    placeholder="What was done, steps taken, final fix, etc..."
                   />
                 </div>
               </CardContent>
@@ -567,27 +675,17 @@ const departmentName =
             {me?.role !== "CUSTOMER" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Notes</CardTitle>
-                  <CardDescription>
-                    Internal notes — not visible to customers
-                  </CardDescription>
+                  <CardTitle>הערות</CardTitle>
+                  <CardDescription>הערות פנימיות — נשמרות רק בלחיצה על “שמור”</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    value={draft?.notes ?? ""}
+                    onChange={(e) =>
+                      setDraft((prev: any) => ({ ...prev, notes: e.target.value }))
+                    }
                     rows={7}
-                    placeholder="Internal notes..."
                   />
-                  <div className="flex gap-2">
-                    <Button onClick={onSaveNotes}>Save Notes</Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setNotes(t.notes ?? "")}
-                    >
-                      Reset
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             )}
