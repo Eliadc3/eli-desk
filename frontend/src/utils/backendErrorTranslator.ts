@@ -3,7 +3,7 @@ export function translateBackendError(msg: string): string {
 
   const FIELD_MAP: Record<string, string> = {
     externalRequesterPhone: "טלפון",
-    externalRequesterName: "שם פותח הקריאה",
+    externalRequesterName: "שם",
     hospitalDepartmentId: "מחלקה",
     subject: "נושא",
     description: "תיאור",

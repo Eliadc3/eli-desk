@@ -41,7 +41,7 @@ export function MainLayout({ children, title, subtitle, actions }: MainLayoutPro
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 ">
               {/* Search */}
               <div className="relative w-64">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

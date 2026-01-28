@@ -40,6 +40,8 @@ import {
   Save,
   ArrowRight,
   X,
+  PhoneCallIcon,
+  CircleUserRound,
 } from "lucide-react";
 import { listTicketStatuses } from "@/api/meta";
 import { printTicketLabel } from "@/lib/printTicketLabel";
@@ -427,7 +429,7 @@ export default function TicketDetail() {
                           setDraft((prev: any) => ({ ...prev, status: v }))
                         }
                       >
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full" dir="rtl">
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -463,7 +465,7 @@ export default function TicketDetail() {
                           }))
                         }
                       >
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full" dir="rtl">
                           <SelectValue placeholder="Select technician" />
                         </SelectTrigger>
                         <SelectContent>
@@ -508,10 +510,10 @@ export default function TicketDetail() {
                           setDraft((prev: any) => ({ ...prev, hospitalDepartmentId: v }))
                         }
                       >
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full" dir="rtl">
                           <SelectValue placeholder="בחר מחלקה" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent dir="rtl">
                           {(deptsQ.data ?? []).map((d: any) => (
                             <SelectItem key={d.id} value={d.id}>
                               {d.name}
@@ -535,6 +537,8 @@ export default function TicketDetail() {
                     {/* ✅ פנימי יכול לערוך פרטי פותח; ציבורי מוצג */}
                     {canEdit ? (
                       <div className="space-y-2">
+                        <div className="relative">
+                        <CircleUserRound className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={draft?.externalRequesterName ?? ""}
                           onChange={(e) =>
@@ -543,8 +547,13 @@ export default function TicketDetail() {
                               externalRequesterName: e.target.value,
                             }))
                           }
-                          placeholder="שם פותח הקריאה"
+                          placeholder="שם"
+                          className="pr-10"
                         />
+                        </div>
+
+                        <div className="relative">
+                        <PhoneCallIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={draft?.externalRequesterPhone ?? ""}
                           onChange={(e) =>
@@ -554,7 +563,9 @@ export default function TicketDetail() {
                             }))
                           }
                           placeholder="טלפון"
-                        />
+                          className="pr-10"
+                          />
+                          </div>
                       </div>
                     ) : (
                       <>

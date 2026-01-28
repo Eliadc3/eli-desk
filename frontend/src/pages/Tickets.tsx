@@ -135,15 +135,8 @@ export default function Tickets() {
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={() => nav("/tickets/new")}>
-              <Plus className="h-4 w-4 mr-2" />
-              פתיחת קריאה
-            </Button>
             <Button variant="outline" onClick={() => nav("/public/new")}>
               טופס חיצוני (דמו)
-            </Button>
-            <Button variant="outline" onClick={() => nav("/admin")}>
-              Admin
             </Button>
           </div>
         </div>
