@@ -10,8 +10,8 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { TicketStatusBadge, TicketStatus } from "./TicketStatusBadge";
-import { TicketPriorityBadge, TicketPriority } from "./TicketPriorityBadge";
+import { TicketStatusBadge } from "./TicketStatusBadge";
+import { TicketPriorityBadge } from "./TicketPriorityBadge";
 import { Clock, Building2 } from "lucide-react";
 
 export interface TicketRow {
@@ -22,7 +22,7 @@ export interface TicketRow {
     name: string;
     initials: string;
   };
-  organization: string;
+  department: string;
   status: TicketStatus;
   priority: TicketPriority;
   assignee?: {
@@ -33,6 +33,20 @@ export interface TicketRow {
   slaDeadline?: string;
   isOverdue?: boolean;
 }
+
+export type TicketStatus =
+  | "new"
+  | "in-progress"
+  | "waiting-on-customer"
+  | "resolved"
+  | "closed";
+
+export type TicketPriority =
+  | "low"
+  | "medium"
+  | "high"
+  | "urgent";
+
 
 interface TicketsTableProps {
   tickets: TicketRow[];
@@ -78,7 +92,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
             <TableHead className="w-24">מזהה</TableHead>
             <TableHead>נושא</TableHead>
             <TableHead className="w-40">פונה</TableHead>
-            <TableHead className="w-36">ארגון</TableHead>
+            <TableHead className="w-36">מחלקה</TableHead>
             <TableHead className="w-28">סטטוס</TableHead>
             <TableHead className="w-24">עדיפות</TableHead>
             <TableHead className="w-32">משויך ל</TableHead>
@@ -138,7 +152,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
               <TableCell>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <Building2 className="w-3.5 h-3.5" />
-                  {ticket.organization}
+                  {ticket.department}
                 </div>
               </TableCell>
               <TableCell>

@@ -36,7 +36,7 @@ function toRow(t: any): TicketRow {
     displayId: `#${t.number}`,  // לתצוגה בלבד
     subject: t.subject ?? "",
     requester: { name: requesterName, initials: requesterInitials },
-    organization: t.hospitalDepartment?.name ?? "—",
+    department: t.hospitalDepartment?.name ?? "—",
     status: status as any,
     priority: priority as any,
     assignee: t.assignee ? { name: assigneeName, initials: assigneeInitials } : undefined,
@@ -110,7 +110,7 @@ export default function Tickets() {
           t.subject ?? "",
           t.requester?.name ?? "",
           t.externalRequesterName ?? "",
-          t.hospitalDepartment?.name ?? "",
+          t.department?.name ?? "",
           t.assignee?.name ?? "",
           t.assignee?.email ?? "",
         ]
@@ -133,12 +133,6 @@ export default function Tickets() {
             <h1 className="text-2xl font-bold">קריאות שירות</h1>
             <p className="text-muted-foreground">ניהול ומעקב אחר כל הקריאות במערכת</p>
           </div>
-
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => nav("/public/new")}>
-              טופס חיצוני (דמו)
-            </Button>
-          </div>
         </div>
 
         <TicketFilters
@@ -151,16 +145,18 @@ export default function Tickets() {
         />
 
         <TicketsTable tickets={filteredRows.map((t: any) => ({
-          id: t.id,
-          displayId: `${t.displayId}`,
-          subject: t.subject,
-          requester: { name: t.requester?.name || t.externalRequesterName || "—", initials: "?" },
-          organization: t.hospitalDepartment?.name ?? "—",
-          status: String(t.status || "").toLowerCase().split("_").join("-"),
-          priority: String(t.priority || "").toLowerCase(),
-          assignee: t.assignee ? { name: t.assignee.name, initials: "?" } : undefined,
-          createdAt: new Date(t.createdAt).toLocaleString(),
-        })) as any} />
+  id: t.id,
+  displayId: `${t.displayId}`,
+  subject: t.subject,
+  requester: { name: t.requester?.name || t.externalRequesterName || "—", initials: "?" },
+  department: t.department ?? "—",
+  status: String(t.status || "").toLowerCase().split("_").join("-"),
+  priority: String(t.priority || "").toLowerCase(),
+  assignee: t.assignee ? { name: t.assignee.name, initials: "?" } : undefined,
+  createdAt: t.createdAt, // כבר מחרוזת אצלך ב-row
+})) as any} />
+
+
 
 
       </div>
