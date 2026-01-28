@@ -14,7 +14,6 @@ export default function PublicNewTicket() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
@@ -45,7 +44,6 @@ export default function PublicNewTicket() {
         subject,
         description,
         name: name || undefined,
-        email: email || undefined,
         phone: phone || undefined,
       });
 
@@ -93,14 +91,9 @@ export default function PublicNewTicket() {
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm">טלפון</label>
+              <label className="text-sm">טלפון *</label>
               <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm">אימייל</label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
 
           <div className="space-y-2">

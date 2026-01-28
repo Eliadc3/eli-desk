@@ -41,7 +41,7 @@ ticketsRouter.get("/", async (req, res, next) => {
         skip,
         take: pageSize,
         include: {
-          requester: { select: { id: true, name: true, email: true } },
+          requester: { select: { id: true, name: true, } },
           hospitalDepartment: { select: { id: true, name: true, type: true } },
           assignee: { select: { id: true, name: true, email: true } },
         },
@@ -64,7 +64,7 @@ ticketsRouter.get("/:id", async (req, res, next) => {
       where: { id },
       include: {
         org: true,
-        requester: { select: { id: true, name: true, email: true } },
+        requester: { select: { id: true, name: true,} },
         hospitalDepartment: { select: { id: true, name: true, type: true } },
         assignee: { select: { id: true, name: true, email: true } },
         resolvedBy: { select: { id: true, name: true, email: true } },
@@ -116,7 +116,6 @@ ticketsRouter.post("/", async (req, res, next) => {
 
         // Requester details (allowed for internal tickets too)
         externalRequesterName: body.externalRequesterName ?? null,
-        externalRequesterEmail: body.externalRequesterEmail ?? null,
         externalRequesterPhone: body.externalRequesterPhone ?? null,
       },
       include: { org: true },
@@ -153,8 +152,6 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
 
     const normalizedBody = {
       ...body,
-      externalRequesterEmail:
-        body.externalRequesterEmail?.trim() === "" ? null : body.externalRequesterEmail,
       externalRequesterPhone:
         body.externalRequesterPhone?.trim() === "" ? null : body.externalRequesterPhone,
       externalRequesterName:
@@ -211,12 +208,11 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
 
 
         externalRequesterName: normalizedBody.externalRequesterName ?? undefined,
-        externalRequesterEmail: normalizedBody.externalRequesterEmail ?? undefined,
         externalRequesterPhone: normalizedBody.externalRequesterPhone ?? undefined,
 
       },
       include: {
-        requester: { select: { id: true, name: true, email: true } },
+        requester: { select: { id: true, name: true } },
         hospitalDepartment: { select: { id: true, name: true, type: true } },
         assignee: { select: { id: true, name: true, email: true } },
       },

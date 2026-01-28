@@ -129,7 +129,6 @@ model Ticket {
 
   // External requester (for public form without login)
   externalRequesterName  String?
-  externalRequesterEmail String?
   externalRequesterPhone String?
 
   // Resolution

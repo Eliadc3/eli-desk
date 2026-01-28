@@ -17,7 +17,6 @@ export const ticketCreateSchema = z.object({
   assigneeId: z.string().optional(),
   // Optional requester details (used by internal technicians too)
   externalRequesterName: z.string().min(2).optional(),
-  externalRequesterEmail: z.string().email().optional(),
   externalRequesterPhone: z.string().min(4).optional(),
 });
 
@@ -32,7 +31,6 @@ export const ticketPatchSchema = z.object({
   resolutionSummary: z.string().nullable().optional(),
   resolutionDetails: z.string().nullable().optional(),
   externalRequesterName: z.string().min(2).nullable().optional(),
-  externalRequesterEmail: z.string().email().nullable().optional(),
   externalRequesterPhone: z.string().min(6).nullable().optional(),
 });
 
@@ -42,7 +40,6 @@ export const publicTicketCreateSchema = z.object({
   description: z.string().min(1),
   priority: z.nativeEnum(TicketPriority).optional(),
   name: z.string().min(2).optional(),
-  email: z.string().email().optional(),
   phone: z.string().min(4).optional(),
   orgId: z.string().optional(),
 });

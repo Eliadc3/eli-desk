@@ -49,10 +49,8 @@ export function RecentTickets() {
             requesterName:
               t.source === "PUBLIC"
                 ? t.externalRequesterName ||
-                  t.externalRequesterEmail ||
                   "Public"
                 : t.requester?.name ||
-                  t.requester?.email ||
                   "—",
             status: String(t.status || "")
               .toLowerCase()

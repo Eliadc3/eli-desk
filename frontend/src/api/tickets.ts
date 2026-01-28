@@ -21,7 +21,6 @@ export type Ticket = {
   assignee?: UserLite | null;
   hospitalDepartment?: DepartmentLite | null;
   externalRequesterName?: string | null;
-  externalRequesterEmail?: string | null;
   externalRequesterPhone?: string | null;
   resolutionSummary?: string | null;
   resolutionDetails?: string | null;
@@ -55,7 +54,6 @@ export async function createTicket(payload: {
   assigneeId?: string;
   status?: TicketStatus;
   externalRequesterName?: string;
-  externalRequesterEmail?: string;
   externalRequesterPhone?: string;
 }) {
   const { data } = await api.post("/tickets", payload);
@@ -79,7 +77,6 @@ export async function createPublicTicket(payload: {
   description: string;
   priority?: TicketPriority;
   name?: string;
-  email?: string;
   phone?: string;
   orgId?: string;
 }) {

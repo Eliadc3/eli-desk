@@ -54,7 +54,6 @@ publicRouter.post("/tickets", async (req, res, next) => {
         assigneeId,
         source: TicketSource.PUBLIC,
         externalRequesterName: body.name ?? null,
-        externalRequesterEmail: body.email ?? null,
         externalRequesterPhone: body.phone ?? null,
         hospitalDepartmentId: body.hospitalDepartmentId,
       },

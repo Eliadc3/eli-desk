@@ -12,8 +12,8 @@ import { useAuth } from "@/context/AuthContext";
 function toRow(t: any): TicketRow {
   const requesterName =
     t.source === "PUBLIC"
-      ? (t.externalRequesterName || t.externalRequesterEmail || "Public")
-      : (t.requester?.name || t.requester?.email || "—");
+      ? (t.externalRequesterName || "Public")
+      : (t.requester?.name || "—");
 
   const requesterInitials = (requesterName || "—")
     .split(" ")
@@ -109,9 +109,7 @@ export default function Tickets() {
           `#${t.number ?? ""}`,
           t.subject ?? "",
           t.requester?.name ?? "",
-          t.requester?.email ?? "",
           t.externalRequesterName ?? "",
-          t.externalRequesterEmail ?? "",
           t.hospitalDepartment?.name ?? "",
           t.assignee?.name ?? "",
           t.assignee?.email ?? "",

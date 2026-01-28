@@ -83,11 +83,10 @@ function formatRequester(t: any) {
   if (!t) return "—";
   if (t.source === "PUBLIC") {
     const name = t.externalRequesterName || "Public";
-    const email = t.externalRequesterEmail ? ` • ${t.externalRequesterEmail}` : "";
     const phone = t.externalRequesterPhone ? ` • ${t.externalRequesterPhone}` : "";
-    return `${name}${email}${phone}`;
+    return `${name}${phone}`;
   }
-  return t.requester?.name || t.requester?.email || "—";
+  return t.requester?.name || "—";
 }
 
 function makeDraftFromTicket(t: any) {
@@ -100,7 +99,6 @@ function makeDraftFromTicket(t: any) {
     hospitalDepartmentId: t.hospitalDepartmentId ?? "",
     // שדות ציבוריים (אם זה PUBLIC)
     externalRequesterName: t.externalRequesterName ?? "",
-    externalRequesterEmail: t.externalRequesterEmail ?? "",
     externalRequesterPhone: t.externalRequesterPhone ?? "",
     // פנימיים
     notes: t.notes ?? "",
@@ -173,30 +171,30 @@ export default function TicketDetail() {
       toast({ title: "Saved" });
     },
     onError: (e: any) => {
-  const status = e?.response?.status;
-  const data = e?.response?.data;
+      const status = e?.response?.status;
+      const data = e?.response?.data;
 
-  let rawMsg: string | null = null;
+      let rawMsg: string | null = null;
 
-  if (data && typeof data === "object") {
-    if (typeof data.error === "string") rawMsg = data.error;
-    else if (typeof data.message === "string") rawMsg = data.message;
-    else if (Array.isArray((data as any).issues)) {
-      rawMsg = (data as any).issues
-        .map((x: any) => `${x.path}: ${x.message}`)
-        .join("\n");
-    }
-  }
+      if (data && typeof data === "object") {
+        if (typeof data.error === "string") rawMsg = data.error;
+        else if (typeof data.message === "string") rawMsg = data.message;
+        else if (Array.isArray((data as any).issues)) {
+          rawMsg = (data as any).issues
+            .map((x: any) => `${x.path}: ${x.message}`)
+            .join("\n");
+        }
+      }
 
-  if (!rawMsg && typeof data === "string") rawMsg = data;
-  if (!rawMsg) rawMsg = e?.message ?? "שגיאה לא ידועה";
+      if (!rawMsg && typeof data === "string") rawMsg = data;
+      if (!rawMsg) rawMsg = e?.message ?? "שגיאה לא ידועה";
 
-  toast({
-    title: `שמירה נכשלה${status ? ` (${status})` : ""}`,
-    description: translateBackendError(rawMsg),
-    variant: "destructive",
-  });
-},
+      toast({
+        title: `שמירה נכשלה${status ? ` (${status})` : ""}`,
+        description: translateBackendError(rawMsg),
+        variant: "destructive",
+      });
+    },
 
 
 
@@ -206,24 +204,24 @@ export default function TicketDetail() {
 
   const isClosingStatus = (s: string) => ["RESOLVED", "CLOSED"].includes((s ?? "").toUpperCase());
 
-function validateBeforeSave(d: any): string | null {
-  const status = (d?.status ?? "").toUpperCase();
+  function validateBeforeSave(d: any): string | null {
+    const status = (d?.status ?? "").toUpperCase();
 
-  // אם לא סוגרים/פותרים – לא מחייבים פתרון בכלל
-  if (!isClosingStatus(status)) return null;
+    // אם לא סוגרים/פותרים – לא מחייבים פתרון בכלל
+    if (!isClosingStatus(status)) return null;
 
-  const summary = (d?.resolutionSummary ?? "").trim();
-  const details = (d?.resolutionDetails ?? "").trim();
+    const summary = (d?.resolutionSummary ?? "").trim();
+    const details = (d?.resolutionDetails ?? "").trim();
 
-  // אופציה A (מומלץ): מחייבים רק Summary
-  if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
+    // אופציה A (מומלץ): מחייבים רק Summary
+    if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
 
-  // אופציה B (מחמיר): מחייבים גם Summary וגם Details
-  // if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
-  // if (details.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'פתרון מורחב' (לפחות 4 תווים).";
+    // אופציה B (מחמיר): מחייבים גם Summary וגם Details
+    // if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
+    // if (details.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'פתרון מורחב' (לפחות 4 תווים).";
 
-  return null;
-}
+    return null;
+  }
 
 
   if (q.isLoading) {
@@ -312,7 +310,6 @@ function validateBeforeSave(d: any): string | null {
                             resolutionSummary: draft.resolutionSummary,
                             resolutionDetails: draft.resolutionDetails,
                             externalRequesterName: draft.externalRequesterName,
-                            externalRequesterEmail: draft.externalRequesterEmail,
                             externalRequesterPhone: draft.externalRequesterPhone,
                           });
                         }}
@@ -549,16 +546,6 @@ function validateBeforeSave(d: any): string | null {
                           placeholder="שם פותח הקריאה"
                         />
                         <Input
-                          value={draft?.externalRequesterEmail ?? ""}
-                          onChange={(e) =>
-                            setDraft((prev: any) => ({
-                              ...prev,
-                              externalRequesterEmail: e.target.value,
-                            }))
-                          }
-                          placeholder="אימייל"
-                        />
-                        <Input
                           value={draft?.externalRequesterPhone ?? ""}
                           onChange={(e) =>
                             setDraft((prev: any) => ({
@@ -575,12 +562,7 @@ function validateBeforeSave(d: any): string | null {
 
                         {t.source === "PUBLIC" && (
                           <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                            {t.externalRequesterEmail && (
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-3.5 w-3.5" />
-                                <span className="break-all">{t.externalRequesterEmail}</span>
-                              </div>
-                            )}
+
                             {t.externalRequesterPhone && (
                               <div className="flex items-center gap-2">
                                 <Phone className="h-3.5 w-3.5" />
