@@ -11,5 +11,5 @@ export const env = {
     process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET ?? "change-me-refresh",
   // Comma-separated list or single origin
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:5173",
-  PUBLIC_FORM_ORG_ID: process.env.PUBLIC_FORM_ORG_ID ?? "demo-org",
+  APP_ORG_ID: process.env.APP_ORG_ID ?? "app-org",
 };

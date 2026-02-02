@@ -1,76 +1,125 @@
+// backend/src/routes/public.ts
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { env } from "../lib/env.js";
-import { publicTicketCreateSchema } from "./schemas.js";
-import { TicketSource } from "@prisma/client";
-import { HttpError } from "../lib/httpError.js";
+import { TicketPriority, TicketSource } from "@prisma/client";
+import { getHospitalDepartments } from "../services/departments.service.js";
 
-export const publicRouter = Router();
 
-// Read-only list for public form
-publicRouter.get("/hospital-departments", async (_req, res, next) => {
-  try {
-    const items = await prisma.department.findMany({ where: { type: "HOSPITAL" }, orderBy: { name: "asc" } });
-    res.json({ items });
-  } catch (e) {
-    next(e);
-  }
+const publicRouter = Router();
+
+function normalizeStr(v: unknown) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s.length ? s : null;
+}
+
+function normalizePriority(v: unknown): TicketPriority {
+  const p = typeof v === "string" ? v.trim().toUpperCase() : "";
+  if (p === "LOW") return "LOW";
+  if (p === "MEDIUM") return "MEDIUM";
+  if (p === "HIGH") return "HIGH";
+  if (p === "URGENT") return "URGENT";
+  return "MEDIUM";
+}
+
+async function getDefaultStatusId(orgId: string) {
+  // 1) דיפולט לפי isDefault בתוך אותו ארגון
+  const byDefault = await prisma.ticketStatus.findFirst({
+    where: { orgId, isDefault: true, isActive: true },
+    select: { id: true },
+  });
+  if (byDefault) return byDefault.id;
+
+  // 2) נפילה ל- key NEW/new בתוך אותו ארגון
+  const byKey = await prisma.ticketStatus.findFirst({
+    where: { orgId, isActive: true, OR: [{ key: "NEW" }, { key: "new" }] },
+    select: { id: true },
+  });
+  if (byKey) return byKey.id;
+
+  throw new Error(`No default ticket status found for orgId=${orgId}`);
+}
+
+async function nextTicketNumber() {
+  // ודא שיש seed שמייצר את Counter ticketNumber, אחרת זה יזרוק
+  const c = await prisma.counter.update({
+    where: { key: "ticketNumber" },
+    data: { value: { increment: 1 } },
+    select: { value: true },
+  });
+  return c.value;
+}
+
+// GET /public/hospital-departments
+publicRouter.get("/hospital-departments", async (_req, res) => {
+  const items = await getHospitalDepartments();
+  return res.json({ items });
 });
 
 
-// POST /public/tickets
-// Public form - no login.
-// NOTE: routes to env.PUBLIC_FORM_ORG_ID unless orgId is provided.
-publicRouter.post("/tickets", async (req, res, next) => {
+
+publicRouter.post("/tickets", async (req, res) => {
   try {
-    const body = publicTicketCreateSchema.parse(req.body);
+    const hospitalDepartmentId = String(req.body?.hospitalDepartmentId ?? "").trim();
+    const subject = String(req.body?.subject ?? "").trim();
+    const description = String(req.body?.description ?? "").trim();
+  
 
-    const orgId = body.orgId ?? env.PUBLIC_FORM_ORG_ID;
-    const org = await prisma.organization.findUnique({ where: { id: orgId } });
-    if (!org) throw new HttpError(400, "Invalid orgId (PUBLIC_FORM_ORG_ID not found)");
+    if (!hospitalDepartmentId || !subject || !description || !req.body?.name || !req.body?.phone) {
+      return res.status(400).json({
+        message: "hospital Department, subject, description, name, phone are required",
+      });
+    }
 
-    // ticket number counter
-    const c = await prisma.counter.upsert({
-      where: { key: "ticketNumber" },
-      update: { value: { increment: 1 } },
-      create: { key: "ticketNumber", value: 1000 },
-    });
+    // ⚠️ אם יש לך org אמיתי – עדיף להביא orgId מהקליינט/קונפיג ולא hardcode
+    const orgId = String(req.body?.orgId ?? "demo-org").trim();
+    const priority = normalizePriority(req.body?.priority);
 
-    // Auto-assign (simple): random technician in same org
+    const externalRequesterName = normalizeStr(req.body?.name ?? req.body?.externalRequesterName);
+    const externalRequesterPhone = normalizeStr(req.body?.phone ?? req.body?.externalRequesterPhone);
+
+    // טכנאי רנדומלי (אם יש)
     const techs = await prisma.user.findMany({
-      where: { role: "TECHNICIAN", orgId },
+      where: { orgId, role: { in: ["TECHNICIAN", "ADMIN"] } },
       select: { id: true },
-      take: 200,
     });
     const assigneeId = techs.length ? techs[Math.floor(Math.random() * techs.length)].id : null;
 
+    // ✅ חובה: סטטוס דיפולט (לפי orgId)
+    const statusId = await getDefaultStatusId(orgId);
+
+    const number = await nextTicketNumber();
+
     const ticket = await prisma.ticket.create({
       data: {
-        number: c.value,
-        subject: body.subject,
-        description: body.description,
-        priority: body.priority,
+        number,
+        subject,
+        description,
+        priority,
         orgId,
         assigneeId,
-        source: TicketSource.PUBLIC,
-        externalRequesterName: body.name ?? null,
-        externalRequesterPhone: body.phone ?? null,
-        hospitalDepartmentId: body.hospitalDepartmentId,
+        source: "PUBLIC" satisfies TicketSource,
+        externalRequesterName,
+        externalRequesterPhone,
+        hospitalDepartmentId,
+
+        // ✅ זה מה שחסר לך:
+        statusId,
       },
-      select: { id: true, number: true, subject: true, status: true, priority: true, createdAt: true },
+      select: {
+        id: true,
+        number: true,
+        subject: true,
+        status: true,
+        priority: true,
+        createdAt: true,
+      },
     });
 
-    await prisma.ticketActivity.create({
-      data: {
-        ticketId: ticket.id,
-        actorId: null,
-        type: "created",
-        message: "Ticket created via public form",
-      },
-    });
-
-    res.status(201).json({ ticket });
-  } catch (e) {
-    next(e);
+    return res.json({ ticket });
+  } catch (e: any) {
+    console.error(e);
+    return res.status(500).json({ message: e?.message ?? "Server error" });
   }
 });
+
+export default publicRouter;

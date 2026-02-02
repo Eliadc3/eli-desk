@@ -1,24 +1,14 @@
 import { Router } from "express";
-import { prisma } from "../lib/prisma.js";
+import { getHospitalDepartments, getTechDepartments } from "../services/departments.service.js";
 
 export const departmentsRouter = Router();
 
-// GET /departments/hospital
-departmentsRouter.get("/hospital", async (_req, res, next) => {
-  try {
-    const items = await prisma.department.findMany({ where: { type: "HOSPITAL" }, orderBy: { name: "asc" } });
-    res.json({ items });
-  } catch (e) {
-    next(e);
-  }
+departmentsRouter.get("/hospital", async (_req, res) => {
+  const items = await getHospitalDepartments();
+  return res.json({ items });
 });
 
-// GET /departments/tech
-departmentsRouter.get("/tech", async (_req, res, next) => {
-  try {
-    const items = await prisma.department.findMany({ where: { type: "TECH" }, orderBy: { name: "asc" } });
-    res.json({ items });
-  } catch (e) {
-    next(e);
-  }
+departmentsRouter.get("/tech", async (_req, res) => {
+  const items = await getTechDepartments();
+  return res.json({ items });
 });

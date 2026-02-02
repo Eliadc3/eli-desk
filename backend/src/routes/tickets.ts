@@ -41,11 +41,10 @@ ticketsRouter.get("/", async (req, res, next) => {
         skip,
         take: pageSize,
         include: {
-          requester: { select: { id: true, name: true, } },
+          requester: { select: { id: true, name: true} },
           hospitalDepartment: { select: { id: true, name: true, type: true } },
           assignee: { select: { id: true, name: true, email: true } },
           status: { select: { id: true, key: true, labelHe: true, color: true } },
-
         },
       }),
       prisma.ticket.count({ where }),

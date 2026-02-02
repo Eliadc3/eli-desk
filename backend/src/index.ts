@@ -12,11 +12,10 @@ import { authRouter } from "./routes/auth.js";
 import { ticketsRouter } from "./routes/tickets.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
-import { publicRouter } from "./routes/public.js";
+import publicRouter  from "./routes/public.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { metaRouter } from "./routes/meta.js";
-
-
+import { bootstrapAppData } from "./bootsrap.js";
 
 const app = express();
 
@@ -66,6 +65,7 @@ app.listen(env.PORT, () => {
   console.log(`eli-desk-backend running on http://localhost:${env.PORT}`);
 });
 
+await bootstrapAppData()
 
 import { ZodError } from "zod";
 import { HttpError } from "./lib/httpError.js";
