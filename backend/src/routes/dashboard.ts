@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { Role, TicketPriority, TicketStatus } from "@prisma/client";
+import { Role, TicketPriority } from "@prisma/client";
 
 export const dashboardRouter = Router();
 
@@ -152,8 +152,14 @@ dashboardRouter.get("/summary", async (req, res, next) => {
 
         const openWhere = {
             ...whereBase,
-            status: { notIn: [TicketStatus.RESOLVED, TicketStatus.CLOSED] },
+            status: {
+                is: {
+                    key: { not: "closed" },
+                },
+            },
         };
+
+
 
         const todayStart = startOfDay(new Date());
         const tomorrowStart = addDays(todayStart, 1);

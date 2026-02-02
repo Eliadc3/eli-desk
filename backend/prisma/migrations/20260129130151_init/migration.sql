@@ -1,4 +1,16 @@
 -- CreateTable
+CREATE TABLE "TicketStatus" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "orgId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "labelHe" TEXT NOT NULL,
+    "color" TEXT,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false
+);
+
+-- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
@@ -45,7 +57,8 @@ CREATE TABLE "Ticket" (
     "number" INTEGER NOT NULL,
     "subject" TEXT NOT NULL,
     "description" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'NEW',
+    "notes" TEXT,
+    "statusId" TEXT NOT NULL,
     "priority" TEXT NOT NULL DEFAULT 'MEDIUM',
     "orgId" TEXT NOT NULL,
     "requesterId" TEXT,
@@ -53,7 +66,6 @@ CREATE TABLE "Ticket" (
     "hospitalDepartmentId" TEXT NOT NULL,
     "source" TEXT NOT NULL DEFAULT 'TECHNICIAN',
     "externalRequesterName" TEXT,
-    "externalRequesterEmail" TEXT,
     "externalRequesterPhone" TEXT,
     "resolutionSummary" TEXT,
     "resolutionDetails" TEXT,
@@ -62,6 +74,7 @@ CREATE TABLE "Ticket" (
     "resolvedById" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Ticket_statusId_fkey" FOREIGN KEY ("statusId") REFERENCES "TicketStatus" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Ticket_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Ticket_requesterId_fkey" FOREIGN KEY ("requesterId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Ticket_assigneeId_fkey" FOREIGN KEY ("assigneeId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -87,6 +100,9 @@ CREATE TABLE "Counter" (
     "key" TEXT NOT NULL PRIMARY KEY,
     "value" INTEGER NOT NULL
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TicketStatus_orgId_key_key" ON "TicketStatus"("orgId", "key");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

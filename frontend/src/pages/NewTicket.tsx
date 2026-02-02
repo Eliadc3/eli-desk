@@ -10,8 +10,16 @@ import { listTicketPriorities, listTicketStatuses } from "@/api/meta";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
-
 type DeptLite = { id: string; name: string };
+
+type StatusDto = {
+  id: string;
+  key: string;
+  labelHe: string;
+  color?: string | null;
+  sortOrder: number;
+  isDefault: boolean;
+};
 
 export default function NewTicket() {
   const nav = useNavigate();
@@ -19,7 +27,7 @@ export default function NewTicket() {
 
   const [previewNumber, setPreviewNumber] = useState<number | null>(null);
   const [departments, setDepartments] = useState<DeptLite[]>([]);
-  const [statuses, setStatuses] = useState<string[]>([]);
+  const [statuses, setStatuses] = useState<StatusDto[]>([]);
   const [priorities, setPriorities] = useState<string[]>([]);
 
   // Working copy (NOT persisted until Save)
@@ -29,7 +37,7 @@ export default function NewTicket() {
     hospitalDepartmentId: "",
     subject: "",
     description: "",
-    status: "NEW",
+    statusId: "",
     priority: "MEDIUM",
   });
 
@@ -44,17 +52,27 @@ export default function NewTicket() {
           listTicketStatuses(),
           listTicketPriorities(),
         ]);
+
         setPreviewNumber(num);
         setDepartments(depts.map((x) => ({ id: x.id, name: x.name })));
         setStatuses(st);
         setPriorities(pr);
 
-        setDraft((d) => ({
-          ...d,
-          hospitalDepartmentId: d.hospitalDepartmentId || (depts[0]?.id ?? ""),
-          status: d.status || (st.includes("NEW") ? "NEW" : st[0] ?? "NEW"),
-          priority: d.priority || (pr.includes("MEDIUM") ? "MEDIUM" : pr[0] ?? "MEDIUM"),
-        }));
+        setDraft((d) => {
+          const normalizeKey = (k?: string | null) => (k ?? "").trim().toUpperCase();
+
+          const defaultStatus =
+            st.find((x) => x.isDefault) ??
+            st.find((x) => normalizeKey(x.key) === "NEW") ??
+            st[0];
+
+          return {
+            ...d,
+            hospitalDepartmentId: d.hospitalDepartmentId || (depts[0]?.id ?? ""),
+            statusId: d.statusId || (defaultStatus?.id ?? ""),
+            priority: d.priority || (pr.includes("MEDIUM") ? "MEDIUM" : pr[0] ?? "MEDIUM"),
+          };
+        });
       } catch (e: any) {
         toast({
           title: "Failed to load",
@@ -71,7 +89,6 @@ export default function NewTicket() {
   }, [departments, draft.hospitalDepartmentId]);
 
   const onCancel = () => {
-    // Rollback: no API call.
     nav("/tickets");
   };
 
@@ -85,16 +102,25 @@ export default function NewTicket() {
       return;
     }
 
+    if (!draft.statusId) {
+      toast({
+        title: "חסר סטטוס",
+        description: "בחר סטטוס תקין.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setBusy(true);
     try {
       const created = await createTicket({
         hospitalDepartmentId: draft.hospitalDepartmentId,
         subject: draft.subject,
         description: draft.description,
-        status: draft.status as any,
+        statusId: draft.statusId || undefined,
         priority: draft.priority as any,
-        externalRequesterName: draft.externalRequesterName || undefined,
-        externalRequesterPhone: draft.externalRequesterPhone || undefined,
+        externalRequesterName: draft.externalRequesterName.trim() || undefined,
+        externalRequesterPhone: draft.externalRequesterPhone.trim() || undefined,
       });
 
       toast({ title: "נשמר" });
@@ -122,6 +148,7 @@ export default function NewTicket() {
               </div>
             </CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -165,12 +192,12 @@ export default function NewTicket() {
                   <label className="text-sm">סטטוס</label>
                   <select
                     className="w-full border rounded-md p-2 bg-background"
-                    value={draft.status}
-                    onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
+                    value={draft.statusId}
+                    onChange={(e) => setDraft((d) => ({ ...d, statusId: e.target.value }))}
                   >
                     {statuses.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                      <option key={s.id} value={s.id}>
+                        {s.labelHe}
                       </option>
                     ))}
                   </select>

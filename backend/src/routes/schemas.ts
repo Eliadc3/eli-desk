@@ -1,20 +1,25 @@
 import { z } from "zod";
-import { TicketPriority, TicketStatus } from "@prisma/client";
+import { TicketPriority } from "@prisma/client";
 
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(4),
 });
 
+// Tickets
 export const ticketCreateSchema = z.object({
   hospitalDepartmentId: z.string().min(1),
   subject: z.string().min(3),
   description: z.string().min(1),
   priority: z.nativeEnum(TicketPriority).optional(),
-  status: z.nativeEnum(TicketStatus).optional(),
+
+  // Status is now dynamic (table) => send statusId
+  statusId: z.string().min(1).optional(),
+
   orgId: z.string().optional(),
   requesterId: z.string().optional(),
   assigneeId: z.string().optional(),
+
   // Optional requester details (used by internal technicians too)
   externalRequesterName: z.string().min(2).optional(),
   externalRequesterPhone: z.string().min(4).optional(),
@@ -24,7 +29,10 @@ export const ticketPatchSchema = z.object({
   subject: z.string().min(3).optional(),
   description: z.string().min(1).optional(),
   priority: z.nativeEnum(TicketPriority).optional(),
-  status: z.nativeEnum(TicketStatus).optional(),
+
+  // Status is now dynamic (table) => send statusId
+  statusId: z.string().min(1).optional(),
+
   assigneeId: z.string().nullable().optional(),
   hospitalDepartmentId: z.string().min(1).optional(),
   notes: z.string().nullable().optional(),
@@ -44,6 +52,7 @@ export const publicTicketCreateSchema = z.object({
   orgId: z.string().optional(),
 });
 
+// Technicians (Admin)
 export const technicianCreateSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2),
@@ -79,6 +88,7 @@ export const technicianPatchSchema = z.object({
     .optional(),
 });
 
+// Departments (Admin)
 export const departmentCreateSchema = z.object({
   name: z.string().min(2),
   type: z.enum(["TECH", "HOSPITAL"]),

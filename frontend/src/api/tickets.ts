@@ -12,7 +12,7 @@ export type Ticket = {
   number: number;
   subject: string;
   description: string;
-  status: TicketStatus;
+  statusId: TicketStatus;
   priority: TicketPriority;
   source: TicketSource;
   createdAt: string;
@@ -52,13 +52,14 @@ export async function createTicket(payload: {
   priority?: TicketPriority;
   requesterId?: string;
   assigneeId?: string;
-  status?: TicketStatus;
+  statusId?: string; // ✅ ID של הסטטוס מהטבלה
   externalRequesterName?: string;
   externalRequesterPhone?: string;
 }) {
   const { data } = await api.post("/tickets", payload);
   return data;
 }
+
 
 export async function updateTicket(id: string, payload: any) {
   const res = await api.patch(`/tickets/${id}`, payload);

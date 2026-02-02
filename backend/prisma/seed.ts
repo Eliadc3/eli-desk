@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { PrismaClient, Role, TicketPriority, TicketStatus, Permission } from "@prisma/client";
+import { PrismaClient, Role, TicketPriority, Permission } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 
@@ -8,6 +8,12 @@ const prisma = new PrismaClient();
 function randChoice<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
+
+const org = await prisma.organization.upsert({
+  where: { id: "demo-org" },
+  update: {},
+  create: { id: "demo-org", name: "Demo Org" },
+});
 
 async function ensureCounter() {
   await prisma.counter.upsert({
@@ -25,16 +31,33 @@ async function nextTicketNumber() {
   return c.value;
 }
 
+async function ensureHebrewTicketStatuses(orgId: string) {
+  const existing = await prisma.ticketStatus.count({ where: { orgId } });
+  if (existing > 0) return;
+
+  await prisma.ticketStatus.createMany({
+    data: [
+      { orgId, key: "open", labelHe: "פתוח", sortOrder: 1, isDefault: true, isActive: true },
+      { orgId, key: "in_progress", labelHe: "בטיפול", sortOrder: 2, isActive: true },
+      { orgId, key: "waiting_customer", labelHe: "ממתין ללקוח", sortOrder: 3, isActive: true },
+      { orgId, key: "waiting_vendor", labelHe: "ממתין לספק", sortOrder: 4, isActive: true },
+      { orgId, key: "closed", labelHe: "נסגר", sortOrder: 5, isActive: true },
+    ],
+  });
+}
+
+
 async function main() {
   await ensureCounter();
-
-  const passwordHash = await bcrypt.hash("admin1234", 10);
-
   const org = await prisma.organization.upsert({
     where: { id: "demo-org" },
     update: {},
     create: { id: "demo-org", name: "Demo Org" },
   });
+  await ensureHebrewTicketStatuses(org.id);
+
+  const passwordHash = await bcrypt.hash("admin1234", 10);
+
 
   const techDept = await prisma.department.upsert({
     where: { name_type: { name: "IT - Helpdesk", type: "TECH" } },
@@ -123,69 +146,14 @@ async function main() {
     select: { id: true },
   });
 
-  // Create some tickets
-  const subjects = [
-    "Printer not printing",
-    "VPN connection drops",
-    "Laptop is slow",
-    "Need access to shared folder",
-    "Email not syncing on phone",
-  ];
+  
 
-  for (let i = 0; i < 12; i++) {
-  const number = await nextTicketNumber();
-  const status = randChoice([
-    TicketStatus.NEW,
-    TicketStatus.IN_PROGRESS,
-    TicketStatus.WAITING_ON_CUSTOMER,
-    TicketStatus.RESOLVED,
-    TicketStatus.CLOSED,
-  ]);
   const priority = randChoice([
     TicketPriority.LOW,
     TicketPriority.MEDIUM,
     TicketPriority.HIGH,
     TicketPriority.URGENT,
   ]);
-
-  const isDone = status === TicketStatus.RESOLVED || status === TicketStatus.CLOSED;
-
-  const created = await prisma.ticket.create({
-    data: {
-      number,
-      subject: randChoice(subjects),
-      description: "Demo ticket description",
-      status,
-      priority,
-
-      org: { connect: { id: org.id } },
-
-      hospitalDepartment: {
-        connect: { id: randChoice([hospDeptER.id, hospDeptLab.id]) },
-      },
-
-      requester: { connect: { id: customer.id } },
-      assignee: { connect: { id: randChoice([randChoice(techs).id, admin.id]) } },
-
-      resolutionSummary: isDone ? "Issue resolved (demo)" : null,
-      resolutionDetails: isDone ? "Steps taken: ... (demo)" : null,
-      resolvedAt: isDone ? new Date() : null,
-      closedAt: status === TicketStatus.CLOSED ? new Date() : null,
-
-      ...(isDone ? { resolvedBy: { connect: { id: randChoice(techs).id } } } : {}),
-    },
-    select: { id: true }, 
-  });
-
-  await prisma.ticketActivity.create({
-    data: {
-      ticketId: created.id,
-      actorId: customer.id, 
-      type: "created",
-      message: "Ticket created",
-    },
-  });
-}
 
   console.log("Seed completed.");
   console.log("Login users:");

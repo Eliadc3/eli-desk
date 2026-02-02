@@ -30,7 +30,6 @@ import {
   ClipboardList,
   UserRound,
   Building2,
-  Mail,
   Phone,
   BadgeCheck,
   AlertTriangle,
@@ -48,14 +47,23 @@ import { printTicketLabel } from "@/lib/printTicketLabel";
 import { listHospitalDepartments } from "@/api/departments";
 import { translateBackendError } from "@/utils/backendErrorTranslator";
 
+type TicketStatusDto = {
+  id: string;
+  key: string;
+  labelHe: string;
+  color?: string | null;
+  sortOrder: number;
+  isDefault: boolean;
+};
 
 function statusTone(s: string) {
-  switch (s) {
+  switch ((s ?? "").toUpperCase()) {
     case "NEW":
       return "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100";
     case "IN_PROGRESS":
       return "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100";
     case "WAITING_ON_CUSTOMER":
+    case "WAITING":
       return "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100";
     case "RESOLVED":
       return "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-100";
@@ -67,7 +75,7 @@ function statusTone(s: string) {
 }
 
 function priorityTone(p: string) {
-  switch (p) {
+  switch ((p ?? "").toUpperCase()) {
     case "LOW":
       return "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100";
     case "MEDIUM":
@@ -79,6 +87,18 @@ function priorityTone(p: string) {
     default:
       return "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100";
   }
+}
+
+function statusLabelFromAny(s: any): string {
+  if (!s) return "—";
+  if (typeof s === "string") return s;
+  return s.labelHe ?? s.key ?? s.id ?? "—";
+}
+
+function statusKeyFromAny(s: any): string {
+  if (!s) return "";
+  if (typeof s === "string") return s.toUpperCase();
+  return String(s.key ?? "").toUpperCase();
 }
 
 function formatRequester(t: any) {
@@ -95,18 +115,36 @@ function makeDraftFromTicket(t: any) {
   return {
     subject: t.subject ?? "",
     description: t.description ?? "",
-    status: t.status ?? "",
+    statusId: t.statusId ?? t.status?.id ?? "",
     priority: t.priority ?? "",
     assigneeId: t.assigneeId ?? "",
     hospitalDepartmentId: t.hospitalDepartmentId ?? "",
-    // שדות ציבוריים (אם זה PUBLIC)
     externalRequesterName: t.externalRequesterName ?? "",
     externalRequesterPhone: t.externalRequesterPhone ?? "",
-    // פנימיים
     notes: t.notes ?? "",
     resolutionSummary: t.resolutionSummary ?? "",
     resolutionDetails: t.resolutionDetails ?? "",
   };
+}
+
+// ✅ בלי Hook: חישוב טקסט סטטוס להדר, בטוח בכל רנדר
+function computeHeaderStatusLabel(draft: any, statuses: TicketStatusDto[], t: any): string {
+  const idFromDraft = draft?.statusId;
+  if (idFromDraft) {
+    const s = statuses.find((x) => x.id === idFromDraft);
+    if (s) return s.labelHe ?? s.key;
+  }
+  return statusLabelFromAny(t?.status);
+}
+
+// ✅ בלי Hook: חישוב key לצבעים/ולוגיקה
+function computeCurrentStatusKey(draft: any, statuses: TicketStatusDto[], t: any): string {
+  const idFromDraft = draft?.statusId;
+  if (idFromDraft) {
+    const s = statuses.find((x) => x.id === idFromDraft);
+    if (s?.key) return s.key.toUpperCase();
+  }
+  return statusKeyFromAny(t?.status);
 }
 
 export default function TicketDetail() {
@@ -121,7 +159,8 @@ export default function TicketDetail() {
     queryFn: () => listTicketStatuses(),
     staleTime: 1000 * 60 * 60,
   });
-  const STATUSES = (statusesQ.data ?? []) as string[];
+
+  const STATUSES = (statusesQ.data ?? []) as TicketStatusDto[];
 
   const deptsQ = useQuery({
     queryKey: ["meta-hospital-departments"],
@@ -136,7 +175,6 @@ export default function TicketDetail() {
   });
 
   const t = q.data as any;
-
   const [draft, setDraft] = useState<any>(null);
 
   useEffect(() => {
@@ -147,7 +185,7 @@ export default function TicketDetail() {
   const canDelete = hasAnyPermission(me, ["TICKET_DELETE"]);
   const canDup = hasAnyPermission(me, ["TICKET_DUPLICATE"]);
   const canReassign = hasAnyPermission(me, ["TICKET_REASSIGN"]);
-  const canEdit = !!me && me.role !== "CUSTOMER"; // לקוח לא עורך פרטי קריאה מלאים
+  const canEdit = !!me && me.role !== "CUSTOMER";
 
   const assigneesQ = useQuery({
     queryKey: ["assignees-lite"],
@@ -167,7 +205,6 @@ export default function TicketDetail() {
   const saveM = useMutation({
     mutationFn: (payload: any) => updateTicket(String(id), payload),
     onSuccess: async () => {
-      // ✅ Save = Commit + refresh from server so draft matches DB
       await queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       await q.refetch();
       toast({ title: "Saved" });
@@ -182,9 +219,7 @@ export default function TicketDetail() {
         if (typeof data.error === "string") rawMsg = data.error;
         else if (typeof data.message === "string") rawMsg = data.message;
         else if (Array.isArray((data as any).issues)) {
-          rawMsg = (data as any).issues
-            .map((x: any) => `${x.path}: ${x.message}`)
-            .join("\n");
+          rawMsg = (data as any).issues.map((x: any) => `${x.path}: ${x.message}`).join("\n");
         }
       }
 
@@ -197,34 +232,22 @@ export default function TicketDetail() {
         variant: "destructive",
       });
     },
-
-
-
-
   });
 
+  // ✅ כל החישובים האלה בלי Hooks -> אין שינוי סדר Hooks
+  const currentStatusKey = computeCurrentStatusKey(draft, STATUSES, t);
+  const headerStatusLabel = computeHeaderStatusLabel(draft, STATUSES, t);
 
   const isClosingStatus = (s: string) => ["RESOLVED", "CLOSED"].includes((s ?? "").toUpperCase());
 
   function validateBeforeSave(d: any): string | null {
-    const status = (d?.status ?? "").toUpperCase();
-
-    // אם לא סוגרים/פותרים – לא מחייבים פתרון בכלל
-    if (!isClosingStatus(status)) return null;
+    if (!isClosingStatus(currentStatusKey)) return null;
 
     const summary = (d?.resolutionSummary ?? "").trim();
-    const details = (d?.resolutionDetails ?? "").trim();
-
-    // אופציה A (מומלץ): מחייבים רק Summary
     if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
-
-    // אופציה B (מחמיר): מחייבים גם Summary וגם Details
-    // if (summary.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'סיכום פתרון' (לפחות 4 תווים).";
-    // if (details.length < 4) return "כדי לסגור/לפתור קריאה, חייב למלא 'פתרון מורחב' (לפחות 4 תווים).";
 
     return null;
   }
-
 
   if (q.isLoading) {
     return (
@@ -242,27 +265,23 @@ export default function TicketDetail() {
     );
   }
 
-  const statusBadgeClass = statusTone(t.status);
+  const statusBadgeClass = statusTone(currentStatusKey);
   const priorityBadgeClass = priorityTone(t.priority);
 
   return (
     <MainLayout>
       <div className="space-y-5">
-        {/* Header */}
         <Card className="overflow-hidden">
           <div className="bg-gradient-to-r from-slate-50 to-white dark:from-slate-900/60 dark:to-slate-950 border-b">
             <div className="p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <div className="text-xl md:text-2xl font-bold">
-                    Ticket #{t.number}
-                  </div>
-                  <Badge className={`border-0 ${statusBadgeClass}`}>
-                    {t.status}
-                  </Badge>
-                  <Badge className={`border-0 ${priorityBadgeClass}`}>
-                    {t.priority}
-                  </Badge>
+                  <div className="text-xl md:text-2xl font-bold">Ticket #{t.number}</div>
+
+                  <Badge className={`border-0 ${statusBadgeClass}`}>{headerStatusLabel}</Badge>
+
+                  <Badge className={`border-0 ${priorityBadgeClass}`}>{t.priority}</Badge>
+
                   {t.source === "PUBLIC" ? (
                     <Badge variant="outline" className="gap-1">
                       <AlertTriangle className="h-3.5 w-3.5" />
@@ -276,9 +295,7 @@ export default function TicketDetail() {
                   )}
                 </div>
 
-                <div className="mt-1 truncate text-muted-foreground ">
-                  {t.subject}
-                </div>
+                <div className="mt-1 truncate text-muted-foreground">{t.subject}</div>
               </div>
 
               <div className="grid mt-3 flex items-center gap-3 flex-wrap">
@@ -304,7 +321,7 @@ export default function TicketDetail() {
                           saveM.mutate({
                             subject: draft.subject,
                             description: draft.description,
-                            status: draft.status,
+                            statusId: draft.statusId || null,
                             priority: draft.priority,
                             assigneeId: draft.assigneeId || null,
                             hospitalDepartmentId: draft.hospitalDepartmentId || null,
@@ -319,7 +336,6 @@ export default function TicketDetail() {
                         שמור
                         <Save className="h-4 w-4 mr-1" />
                       </Button>
-
 
                       <Button
                         variant="outline"
@@ -405,9 +421,7 @@ export default function TicketDetail() {
           </div>
         </Card>
 
-        {/* Main grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left: Details + Reassign inside */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -417,22 +431,20 @@ export default function TicketDetail() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              {/* Status + Assignee strip */}
               <div className="rounded-xl border bg-card p-3 space-y-3">
                 <div className="grid grid-cols-1 gap-3">
                   <div className="space-y-2">
                     <div className="text-xs font-medium text-muted-foreground">STATUS</div>
                     {canEdit ? (
                       <Select
-                        value={draft?.status ?? t.status}
-                        onValueChange={(v) =>
-                          setDraft((prev: any) => ({ ...prev, status: v }))
-                        }
+                        value={draft?.statusId ?? t.statusId ?? t.status?.id ?? ""}
+                        onValueChange={(v) => setDraft((prev: any) => ({ ...prev, statusId: v }))}
                       >
                         <SelectTrigger className="w-full" dir="rtl">
-                          <SelectValue placeholder="Select status" />
+                          <SelectValue placeholder="בחר סטטוס" />
                         </SelectTrigger>
-                        <SelectContent>
+
+                        <SelectContent dir="rtl">
                           {statusesQ.isLoading && (
                             <SelectItem value="__loading__" disabled>
                               טוען...
@@ -441,14 +453,14 @@ export default function TicketDetail() {
 
                           {!statusesQ.isLoading &&
                             STATUSES.map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.labelHe}
                               </SelectItem>
                             ))}
                         </SelectContent>
                       </Select>
                     ) : (
-                      <div className="text-sm">{t.status}</div>
+                      <div className="text-sm">{headerStatusLabel}</div>
                     )}
                   </div>
 
@@ -495,14 +507,12 @@ export default function TicketDetail() {
 
               <Separator />
 
-              {/* Meta rows */}
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-2">
                   <Building2 className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div className="min-w-0">
                     <div className="text-xs mb-1 text-muted-foreground">מחלקה מדווחת</div>
 
-                    {/* ✅ עכשיו עריך באמת (draft) */}
                     {canEdit ? (
                       <Select
                         value={draft?.hospitalDepartmentId ?? t.hospitalDepartmentId ?? ""}
@@ -534,38 +544,37 @@ export default function TicketDetail() {
                   <div className="min-w-0 w-full">
                     <div className="text-xs mb-1 text-muted-foreground">פותח הקריאה</div>
 
-                    {/* ✅ פנימי יכול לערוך פרטי פותח; ציבורי מוצג */}
                     {canEdit ? (
                       <div className="space-y-2">
                         <div className="relative">
-                        <CircleUserRound className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={draft?.externalRequesterName ?? ""}
-                          onChange={(e) =>
-                            setDraft((prev: any) => ({
-                              ...prev,
-                              externalRequesterName: e.target.value,
-                            }))
-                          }
-                          placeholder="שם"
-                          className="pr-10"
-                        />
+                          <CircleUserRound className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={draft?.externalRequesterName ?? ""}
+                            onChange={(e) =>
+                              setDraft((prev: any) => ({
+                                ...prev,
+                                externalRequesterName: e.target.value,
+                              }))
+                            }
+                            placeholder="שם"
+                            className="pr-10"
+                          />
                         </div>
 
                         <div className="relative">
-                        <PhoneCallIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={draft?.externalRequesterPhone ?? ""}
-                          onChange={(e) =>
-                            setDraft((prev: any) => ({
-                              ...prev,
-                              externalRequesterPhone: e.target.value,
-                            }))
-                          }
-                          placeholder="טלפון"
-                          className="pr-10"
+                          <PhoneCallIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={draft?.externalRequesterPhone ?? ""}
+                            onChange={(e) =>
+                              setDraft((prev: any) => ({
+                                ...prev,
+                                externalRequesterPhone: e.target.value,
+                              }))
+                            }
+                            placeholder="טלפון"
+                            className="pr-10"
                           />
-                          </div>
+                        </div>
                       </div>
                     ) : (
                       <>
@@ -573,7 +582,6 @@ export default function TicketDetail() {
 
                         {t.source === "PUBLIC" && (
                           <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-
                             {t.externalRequesterPhone && (
                               <div className="flex items-center gap-2">
                                 <Phone className="h-3.5 w-3.5" />
@@ -601,7 +609,6 @@ export default function TicketDetail() {
             </CardContent>
           </Card>
 
-          {/* Right: Content + Resolution + Notes */}
           <div className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader>
@@ -614,9 +621,7 @@ export default function TicketDetail() {
                   <Input
                     disabled={!canEdit}
                     value={draft?.subject ?? ""}
-                    onChange={(e) =>
-                      setDraft((prev: any) => ({ ...prev, subject: e.target.value }))
-                    }
+                    onChange={(e) => setDraft((prev: any) => ({ ...prev, subject: e.target.value }))}
                   />
                 </div>
 
@@ -674,9 +679,7 @@ export default function TicketDetail() {
                 <CardContent className="space-y-3">
                   <Textarea
                     value={draft?.notes ?? ""}
-                    onChange={(e) =>
-                      setDraft((prev: any) => ({ ...prev, notes: e.target.value }))
-                    }
+                    onChange={(e) => setDraft((prev: any) => ({ ...prev, notes: e.target.value }))}
                     rows={7}
                   />
                 </CardContent>

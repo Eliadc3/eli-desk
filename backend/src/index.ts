@@ -10,7 +10,6 @@ import { requireRole } from "./middleware/requireRole.js";
 import { Role } from "@prisma/client";
 import { authRouter } from "./routes/auth.js";
 import { ticketsRouter } from "./routes/tickets.js";
-import { demoRouter } from "./routes/demo.js";
 import { adminRouter } from "./routes/admin.js";
 import { departmentsRouter } from "./routes/departments.js";
 import { publicRouter } from "./routes/public.js";
@@ -60,9 +59,6 @@ app.use("/dashboard", requireAuth, dashboardRouter);
 
 // Admin routes
 app.use("/admin", requireAuth, adminRouter);
-
-// Admin-only demo endpoints
-app.use("/demo", requireAuth, requireRole(Role.ADMIN), demoRouter);
 
 app.use(errorHandler);
 

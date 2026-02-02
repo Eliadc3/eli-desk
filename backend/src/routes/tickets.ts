@@ -22,7 +22,7 @@ ticketsRouter.get("/", async (req, res, next) => {
   try {
     const { role, orgId } = userCtx(req);
 
-    const status = String(req.query.status ?? "");
+    const statusId = String(req.query.statusId ?? "");
     const page = Math.max(1, Number(req.query.page ?? 1));
     const pageSize = Math.min(50, Math.max(5, Number(req.query.pageSize ?? 20)));
     const skip = (page - 1) * pageSize;
@@ -32,7 +32,7 @@ ticketsRouter.get("/", async (req, res, next) => {
       if (!orgId) throw new HttpError(403, "Customer missing orgId");
       where.orgId = orgId;
     }
-    if (status) where.status = status;
+    if (statusId) where.statusId = statusId;
 
     const [items, total] = await Promise.all([
       prisma.ticket.findMany({
@@ -44,6 +44,8 @@ ticketsRouter.get("/", async (req, res, next) => {
           requester: { select: { id: true, name: true, } },
           hospitalDepartment: { select: { id: true, name: true, type: true } },
           assignee: { select: { id: true, name: true, email: true } },
+          status: { select: { id: true, key: true, labelHe: true, color: true } },
+
         },
       }),
       prisma.ticket.count({ where }),
@@ -64,10 +66,11 @@ ticketsRouter.get("/:id", async (req, res, next) => {
       where: { id },
       include: {
         org: true,
-        requester: { select: { id: true, name: true,} },
+        requester: { select: { id: true, name: true, } },
         hospitalDepartment: { select: { id: true, name: true, type: true } },
         assignee: { select: { id: true, name: true, email: true } },
         resolvedBy: { select: { id: true, name: true, email: true } },
+        status: { select: { id: true, key: true, labelHe: true, color: true } },
         activities: {
           orderBy: { createdAt: "asc" },
           include: { actor: { select: { id: true, name: true } } },
@@ -98,6 +101,14 @@ ticketsRouter.post("/", async (req, res, next) => {
     if (!finalOrgId) throw new HttpError(400, "Missing orgId");
 
     const number = await nextTicketNumber();
+    const defaultStatus = await prisma.ticketStatus.findFirst({
+      where: { orgId: finalOrgId, isDefault: true, isActive: true },
+      select: { id: true },
+    });
+
+    if (!defaultStatus) throw new HttpError(500, "Default ticket status is not configured");
+
+    const statusIdToUse = body.statusId ?? defaultStatus.id;
 
     const ticket = await prisma.ticket.create({
       data: {
@@ -105,14 +116,14 @@ ticketsRouter.post("/", async (req, res, next) => {
         subject: body.subject,
         description: body.description,
         priority: body.priority,
-        status: body.status,
+        statusId: statusIdToUse,
         orgId: finalOrgId,
         // IMPORTANT: we do NOT force requesterId=sub for technicians.
         // Technicians often open tickets on behalf of someone else.
         requesterId: role === Role.CUSTOMER ? sub : (body.requesterId ?? null),
         source: role === Role.CUSTOMER ? TicketSource.PORTAL : TicketSource.TECHNICIAN,
         assigneeId: body.assigneeId ?? null,
-        hospitalDepartmentId: body.hospitalDepartmentId,
+        hospitalDepartmentId: body.hospitalDepartmentId ?? undefined,
 
         // Requester details (allowed for internal tickets too)
         externalRequesterName: body.externalRequesterName ?? null,
@@ -158,7 +169,10 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
         body.externalRequesterName?.trim() === "" ? null : body.externalRequesterName,
     };
 
-    const existing = await prisma.ticket.findUnique({ where: { id } });
+    const existing = await prisma.ticket.findUnique({
+      where: { id },
+      include: { status: { select: { id: true, key: true } } },
+    });
     if (!existing) throw new HttpError(404, "Ticket not found");
     if (role === Role.CUSTOMER && existing.orgId !== orgId) throw new HttpError(403, "Forbidden");
 
@@ -171,24 +185,31 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
       }
     }
 
-    // ✅ resolution validation: require summary ONLY when final status is RESOLVED/CLOSED
-    const finalStatus = normalizedBody.status ?? existing.status;
-    const isClosing = finalStatus === "RESOLVED" || finalStatus === "CLOSED";
+    let nextStatusKey: string | null = null;
+
+    if (normalizedBody.statusId) {
+      const st = await prisma.ticketStatus.findFirst({
+        where: { id: normalizedBody.statusId },
+        select: { key: true },
+      });
+      if (!st) throw new HttpError(400, "Invalid statusId");
+      nextStatusKey = st.key;
+    } else {
+      nextStatusKey = existing.status?.key ?? null;
+    }
+
+    const isClosing = nextStatusKey === "closed";
 
     if (isClosing) {
       const summary = (normalizedBody.resolutionSummary ?? existing.resolutionSummary ?? "").trim();
-
       // "יותר מ-3 תווים" => מינימום 4
       if (summary.length < 4) {
         throw new HttpError(
           400,
-          "Cannot save ticket with status RESOLVED/CLOSED without resolution summary (min 4 chars)."
+          "Cannot close ticket without resolution summary (min 4 chars)."
         );
       }
     }
-
-    const nextStatus = body.status;
-    const isMovingToClosing = nextStatus === "RESOLVED" || nextStatus === "CLOSED";
 
     const updated = await prisma.ticket.update({
       where: { id },
@@ -196,15 +217,14 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
         subject: body.subject,
         description: body.description,
         priority: body.priority,
-        status: body.status,
+        statusId: body.statusId ?? undefined,
         assigneeId: body.assigneeId ?? undefined,
-        hospitalDepartmentId: body.hospitalDepartmentId,
+        hospitalDepartmentId: body.hospitalDepartmentId ?? undefined,
         notes: body.notes ?? undefined,
         resolutionSummary: body.resolutionSummary ?? undefined,
         resolutionDetails: body.resolutionDetails ?? undefined,
-        resolvedById: isMovingToClosing ? sub : undefined,
-        resolvedAt: nextStatus === "RESOLVED" ? new Date() : undefined,
-        closedAt: nextStatus === "CLOSED" ? new Date() : undefined,
+        resolvedById: isClosing ? sub : undefined,
+        closedAt: isClosing ? new Date() : undefined,
 
 
         externalRequesterName: normalizedBody.externalRequesterName ?? undefined,

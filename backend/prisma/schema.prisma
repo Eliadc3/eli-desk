@@ -22,12 +22,19 @@ enum Permission {
   DEPT_MANAGE
 }
 
-enum TicketStatus {
-  NEW
-  IN_PROGRESS
-  WAITING_ON_CUSTOMER
-  RESOLVED
-  CLOSED
+model TicketStatus {
+  id        String   @id @default(cuid())
+  orgId     String
+  key       String
+  labelHe   String
+  color     String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+
+  tickets   Ticket[]
+
+  @@unique([orgId, key])
 }
 
 enum TicketSource {
@@ -109,7 +116,8 @@ model Ticket {
   subject     String
   description String
   notes       String? 
-  status      TicketStatus   @default(NEW)
+  statusId    String
+  status      TicketStatus @relation(fields: [statusId], references: [id])
   priority    TicketPriority @default(MEDIUM)
 
   orgId String
