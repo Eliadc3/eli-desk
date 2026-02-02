@@ -28,7 +28,12 @@ function toRow(t: any): TicketRow {
     .slice(0, 2)
     .join("");
 
-  const status = String(t.status || "").toLowerCase().split("_").join("-");
+  const statusKey =
+    typeof t.status === "string"
+      ? t.status
+      : (t.status?.key ?? t.status?.name ?? t.status?.id ?? "");
+
+  const status = String(statusKey).toLowerCase().replace(/_/g, "-");
   const priority = String(t.priority || "").toLowerCase();
 
   return {
@@ -68,7 +73,7 @@ export default function Tickets() {
   const filteredRows = useMemo(() => {
     let out = rows;
 
-        // 1) assignee filter
+    // 1) assignee filter
     if (assigneeFilter === "unassigned") {
       out = out.filter((t: any) => !t.assignee && !t.assigneeId);
     }
@@ -102,7 +107,7 @@ export default function Tickets() {
     }
 
     // search client-filter (subject / displayId / requester)
-     const s = search.trim().toLowerCase();
+    const s = search.trim().toLowerCase();
     if (s) {
       out = out.filter((t: any) => {
         const hay = [
@@ -145,16 +150,16 @@ export default function Tickets() {
         />
 
         <TicketsTable tickets={filteredRows.map((t: any) => ({
-  id: t.id,
-  displayId: `${t.displayId}`,
-  subject: t.subject,
-  requester: { name: t.requester?.name || t.externalRequesterName || "—", initials: "?" },
-  department: t.department ?? "—",
-  status: String(t.status || "").toLowerCase().split("_").join("-"),
-  priority: String(t.priority || "").toLowerCase(),
-  assignee: t.assignee ? { name: t.assignee.name, initials: "?" } : undefined,
-  createdAt: t.createdAt, // כבר מחרוזת אצלך ב-row
-})) as any} />
+          id: t.id,
+          displayId: `${t.displayId}`,
+          subject: t.subject,
+          requester: { name: t.requester?.name || t.externalRequesterName || "—", initials: "?" },
+          department: t.department ?? "—",
+          status: String(t.statusKey || t.status || "").toLowerCase().replace(/_/g, "-"),
+          priority: String(t.priority || "").toLowerCase(),
+          assignee: t.assignee ? { name: t.assignee.name, initials: "?" } : undefined,
+          createdAt: t.createdAt, // כבר מחרוזת אצלך ב-row
+        })) as any} />
 
 
 

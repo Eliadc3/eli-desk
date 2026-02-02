@@ -7,7 +7,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { hasAnyPermission, useAuth } from "@/context/AuthContext";
-import { listDepartments, createDepartment, deleteDepartment, patchDepartment, listTechnicians, createTechnician, patchTechnician, deleteTechnician } from "@/api/admin";
+import {
+  listDepartments,
+  createDepartment,
+  deleteDepartment,
+  patchDepartment,
+  listTechnicians,
+  createTechnician,
+  patchTechnician,
+  deleteTechnician,
+  listAdminTicketStatuses,
+  createAdminTicketStatus,
+  patchAdminTicketStatus,
+  deleteAdminTicketStatus,
+} from "@/api/admin";
+
 import type { Permission } from "@/api/auth";
 import { listTechDepartments } from "@/api/departments";
 
@@ -34,26 +48,39 @@ export default function Admin() {
   const [newTech, setNewTech] = useState({ email: "", name: "", password: "", techDepartmentId: "" });
   const [techDepts, setTechDepts] = useState<{ id: string; name: string }[]>([]);
 
+  const [ticketStatuses, setTicketStatuses] = useState<any[]>([]);
+  const [newStatus, setNewStatus] = useState({
+    key: "",
+    labelHe: "",
+    color: "",
+    sortOrder: 0,
+    isActive: true,
+    isDefault: false,
+  });
+
 
   const [permDraft, setPermDraft] = useState<Record<string, Permission[]>>({});
   const [permDirty, setPermDirty] = useState<Record<string, boolean>>({});
 
   const refresh = async () => {
-    if (canDept) setDepartments(await listDepartments());
-    if (canTech) {
-  const list = await listTechnicians();
-  setTechs(list);
-
-  const init: Record<string, Permission[]> = {};
-  for (const t of list) {
-    init[t.id] = (t.permissions ?? []).map((x: any) => x.perm);
-  }
-  setPermDraft(init);
-  setPermDirty({});
-
-  const td = await listTechDepartments();
-  setTechDepts(td.map((x) => ({ id: x.id, name: x.name })));
+    if (canDept) {
+  setDepartments(await listDepartments());
+  setTicketStatuses(await listAdminTicketStatuses());
 }
+    if (canTech) {
+      const list = await listTechnicians();
+      setTechs(list);
+
+      const init: Record<string, Permission[]> = {};
+      for (const t of list) {
+        init[t.id] = (t.permissions ?? []).map((x: any) => x.perm);
+      }
+      setPermDraft(init);
+      setPermDirty({});
+
+      const td = await listTechDepartments();
+      setTechDepts(td.map((x) => ({ id: x.id, name: x.name })));
+    }
 
   };
 
@@ -69,6 +96,7 @@ export default function Admin() {
           <TabsList>
             <TabsTrigger value="departments" disabled={!canDept}>Departments</TabsTrigger>
             <TabsTrigger value="technicians" disabled={!canTech}>Technicians</TabsTrigger>
+            <TabsTrigger value="ticket-statuses" disabled={!canDept}>Ticket Statuses</TabsTrigger>
           </TabsList>
 
           <TabsContent value="departments">
@@ -80,9 +108,13 @@ export default function Admin() {
                   <CardHeader><CardTitle>Create Department</CardTitle></CardHeader>
                   <CardContent className="flex flex-col md:flex-row gap-3">
                     <Input placeholder="Name" value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} />
-                    <select className="border rounded-md p-2 bg-background" value={newDeptType} onChange={(e) => setNewDeptType(e.target.value as any)}>
-                      <option value="HOSPITAL">Hospital</option>
-                      <option value="TECH">Tech</option>
+                    <select
+                      className="border rounded-md p-2 bg-background"
+                      value={newDeptType}
+                      onChange={(e) => setNewDeptType(e.target.value as any)}
+                    >
+                      <option value="HOSPITAL">Hospital (tickets)</option>
+                      <option value="TECH">Tech (technicians)</option>
                     </select>
                     <Button onClick={async () => {
                       try {
@@ -98,35 +130,78 @@ export default function Admin() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader><CardTitle>All Departments</CardTitle></CardHeader>
-                  <CardContent className="space-y-2">
-                    {departments.map((d) => (
-                      <div key={d.id} className="flex items-center gap-2 border rounded-md p-2">
-                        <div className="flex-1">
-                          <div className="font-medium">{d.name}</div>
-                          <div className="text-xs opacity-70">{d.type}</div>
-                        </div>
-                        <Button variant="outline" onClick={async () => {
-                          const name = prompt("New name", d.name);
-                          if (!name) return;
-                          try { await patchDepartment(d.id, { name }); await refresh(); } catch (e: any) {
-                            toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
-                          }
-                        }}>Rename</Button>
-                        <Button variant="destructive" onClick={async () => {
-                          if (!confirm("Delete department?")) return;
-                          try { await deleteDepartment(d.id); await refresh(); } catch (e: any) {
-                            toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
-                          }
-                        }}>Delete</Button>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                <Tabs defaultValue="hospital">
+                  <TabsList>
+                    <TabsTrigger value="hospital">Hospital Departments</TabsTrigger>
+                    <TabsTrigger value="tech">Tech Departments</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="hospital">
+                    <Card>
+                      <CardHeader><CardTitle>Hospital Departments (Tickets)</CardTitle></CardHeader>
+                      <CardContent className="space-y-2">
+                        {departments.filter(d => d.type === "HOSPITAL").map((d) => (
+                          <div key={d.id} className="flex items-center gap-2 border rounded-md p-2">
+                            <div className="flex-1">
+                              <div className="font-medium">{d.name}</div>
+                              <div className="text-xs opacity-70">{d.type}</div>
+                            </div>
+                            <Button variant="outline" onClick={async () => {
+                              const name = prompt("New name", d.name);
+                              if (!name) return;
+                              try { await patchDepartment(d.id, { name }); await refresh(); }
+                              catch (e: any) {
+                                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                              }
+                            }}>Rename</Button>
+                            <Button variant="destructive" onClick={async () => {
+                              if (!confirm("Delete department?")) return;
+                              try { await deleteDepartment(d.id); await refresh(); }
+                              catch (e: any) {
+                                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                              }
+                            }}>Delete</Button>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="tech">
+                    <Card>
+                      <CardHeader><CardTitle>Tech Departments (Technicians)</CardTitle></CardHeader>
+                      <CardContent className="space-y-2">
+                        {departments.filter(d => d.type === "TECH").map((d) => (
+                          <div key={d.id} className="flex items-center gap-2 border rounded-md p-2">
+                            <div className="flex-1">
+                              <div className="font-medium">{d.name}</div>
+                              <div className="text-xs opacity-70">{d.type}</div>
+                            </div>
+                            <Button variant="outline" onClick={async () => {
+                              const name = prompt("New name", d.name);
+                              if (!name) return;
+                              try { await patchDepartment(d.id, { name }); await refresh(); }
+                              catch (e: any) {
+                                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                              }
+                            }}>Rename</Button>
+                            <Button variant="destructive" onClick={async () => {
+                              if (!confirm("Delete department?")) return;
+                              try { await deleteDepartment(d.id); await refresh(); }
+                              catch (e: any) {
+                                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                              }
+                            }}>Delete</Button>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
               </div>
             )}
           </TabsContent>
+
 
           <TabsContent value="technicians">
             {!canTech ? (
@@ -196,25 +271,94 @@ export default function Admin() {
                   <CardContent className="space-y-2">
                     {techs.map((t) => (
                       <div key={t.id} className="border rounded-md p-3 space-y-2">
-                        <div className="flex flex-col md:flex-row md:items-center gap-2">
+                        <div className="flex flex-col md:flex-row md:items-start gap-2">
                           <div className="flex-1">
-                            <div className="font-medium">{t.name} <span className="opacity-70 text-sm">({t.email})</span></div>
-                            <div className="text-xs opacity-70">Dept: {t.techDepartment?.name ?? t.techDepartmentId ?? "-"}</div>
+                            <div className="font-medium">
+                              {t.name} <span className="opacity-70 text-sm">({t.email})</span>
+                            </div>
+                            <div className="text-xs opacity-70">
+                              Dept: {t.techDepartment?.name ?? t.techDepartmentId ?? "-"}
+                            </div>
                           </div>
-                          <Button variant="outline" onClick={async () => {
-                            const name = prompt("New name", t.name);
-                            if (!name) return;
-                            try { await patchTechnician(t.id, { name }); await refresh(); } catch (e: any) {
-                              toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
-                            }
-                          }}>Rename</Button>
-                          <Button variant="destructive" onClick={async () => {
-                            if (!confirm("Delete technician?")) return;
-                            try { await deleteTechnician(t.id); await refresh(); } catch (e: any) {
-                              toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
-                            }
-                          }}>Delete</Button>
+
+                          {/* Actions column */}
+                          <div className="flex flex-col items-stretch md:items-end gap-2">
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="outline"
+                                onClick={async () => {
+                                  const name = prompt("New name", t.name);
+                                  if (!name) return;
+                                  try {
+                                    await patchTechnician(t.id, { name });
+                                    await refresh();
+                                  } catch (e: any) {
+                                    toast({
+                                      title: "Failed",
+                                      description: e?.response?.data?.message ?? e?.message,
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                              >
+                                Rename
+                              </Button>
+
+                              <Button
+                                variant="destructive"
+                                onClick={async () => {
+                                  if (!confirm("Delete technician?")) return;
+                                  try {
+                                    await deleteTechnician(t.id);
+                                    await refresh();
+                                  } catch (e: any) {
+                                    toast({
+                                      title: "Failed",
+                                      description: e?.response?.data?.message ?? e?.message,
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+
+                            <div className="flex gap-2  justify-end">
+                              <Button
+                                disabled={!permDirty[t.id]}
+                                onClick={async () => {
+                                  try {
+                                    await patchTechnician(t.id, { permissions: permDraft[t.id] ?? [] });
+                                    await refresh();
+                                    toast({ title: "Permissions saved" });
+                                  } catch (e: any) {
+                                    toast({
+                                      title: "Failed",
+                                      description: e?.response?.data?.message ?? e?.message,
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                              >
+                                Save
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                disabled={!permDirty[t.id]}
+                                onClick={() => {
+                                  const original = (t.permissions ?? []).map((x: any) => x.perm);
+                                  setPermDraft((prev) => ({ ...prev, [t.id]: original }));
+                                  setPermDirty((prev) => ({ ...prev, [t.id]: false }));
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
                         </div>
+
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                           {PERMS.map((p) => {
@@ -240,36 +384,6 @@ export default function Admin() {
                           })}
 
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            disabled={!permDirty[t.id]}
-                            onClick={async () => {
-                              try {
-                                await patchTechnician(t.id, { permissions: permDraft[t.id] ?? [] });
-                                await refresh();
-                                toast({ title: "Permissions saved" });
-                              } catch (e: any) {
-                                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
-                              }
-                            }}
-                          >
-                            Save
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            disabled={!permDirty[t.id]}
-                            onClick={() => {
-                              const original = (t.permissions ?? []).map((x: any) => x.perm);
-                              setPermDraft((prev) => ({ ...prev, [t.id]: original }));
-                              setPermDirty((prev) => ({ ...prev, [t.id]: false }));
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-
-
                       </div>
                     ))}
                   </CardContent>
@@ -277,6 +391,171 @@ export default function Admin() {
               </div>
             )}
           </TabsContent>
+          <TabsContent value="ticket-statuses">
+  {!canDept ? (
+    <Card><CardContent className="p-6">No permission.</CardContent></Card>
+  ) : (
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader><CardTitle>Create Ticket Status</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <Input
+            placeholder="Key (e.g. NEW)"
+            value={newStatus.key}
+            onChange={(e) => setNewStatus({ ...newStatus, key: e.target.value })}
+          />
+          <Input
+            placeholder="Label (Hebrew)"
+            value={newStatus.labelHe}
+            onChange={(e) => setNewStatus({ ...newStatus, labelHe: e.target.value })}
+          />
+          <Input
+            placeholder="Color (#RRGGBB)"
+            value={newStatus.color}
+            onChange={(e) => setNewStatus({ ...newStatus, color: e.target.value })}
+          />
+          <Input
+            placeholder="Sort"
+            type="number"
+            value={String(newStatus.sortOrder)}
+            onChange={(e) => setNewStatus({ ...newStatus, sortOrder: Number(e.target.value) })}
+          />
+
+          <label className="flex items-center gap-2 text-sm border rounded-md px-3">
+            <Checkbox
+              checked={newStatus.isActive}
+              onCheckedChange={(v) => setNewStatus({ ...newStatus, isActive: Boolean(v) })}
+            />
+            Active
+          </label>
+
+          <label className="flex items-center gap-2 text-sm border rounded-md px-3">
+            <Checkbox
+              checked={newStatus.isDefault}
+              onCheckedChange={(v) => setNewStatus({ ...newStatus, isDefault: Boolean(v) })}
+            />
+            Default
+          </label>
+
+          <Button
+            className="md:col-span-6"
+            onClick={async () => {
+              try {
+                if (!newStatus.key.trim() || !newStatus.labelHe.trim()) return;
+
+                await createAdminTicketStatus({
+                  key: newStatus.key.trim(),
+                  labelHe: newStatus.labelHe.trim(),
+                  color: newStatus.color.trim() ? newStatus.color.trim() : null,
+                  sortOrder: Number(newStatus.sortOrder) || 0,
+                  isActive: newStatus.isActive,
+                  isDefault: newStatus.isDefault,
+                });
+
+                setNewStatus({ key: "", labelHe: "", color: "", sortOrder: 0, isActive: true, isDefault: false });
+                await refresh();
+                toast({ title: "Status created" });
+              } catch (e: any) {
+                toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+              }
+            }}
+          >
+            Add status
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>All Ticket Statuses</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {ticketStatuses.map((s) => (
+            <div key={s.id} className="flex flex-col md:flex-row md:items-center gap-2 border rounded-md p-2">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full border"
+                    style={{ background: s.color ?? "transparent" }}
+                    title={s.color ?? ""}
+                  />
+                  <div className="font-medium">{s.labelHe}</div>
+                  <div className="text-xs opacity-70">({s.key})</div>
+                  {s.isDefault ? <span className="text-xs px-2 py-1 rounded border">Default</span> : null}
+                  {!s.isActive ? <span className="text-xs px-2 py-1 rounded border">Inactive</span> : null}
+                </div>
+                <div className="text-xs opacity-70">Sort: {s.sortOrder}</div>
+              </div>
+
+              {!s.isDefault ? (
+                  <Button
+                    onClick={async () => {
+                      try {
+                        await patchAdminTicketStatus(s.id, { isDefault: true });
+                        await refresh();
+                        toast({ title: "Default updated" });
+                      } catch (e: any) {
+                        toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                      }
+                    }}
+                  >
+                    Set Default
+                  </Button>
+                ) : null}
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    const labelHe = prompt("New label (Hebrew)", s.labelHe);
+                    if (!labelHe) return;
+                    try {
+                      await patchAdminTicketStatus(s.id, { labelHe });
+                      await refresh();
+                    } catch (e: any) {
+                      toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                    }
+                  }}
+                >
+                  Rename
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      await patchAdminTicketStatus(s.id, { isActive: !s.isActive });
+                      await refresh();
+                    } catch (e: any) {
+                      toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                    }
+                  }}
+                >
+                  {s.isActive ? "Disable" : "Enable"}
+                </Button>
+
+                
+
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    if (!confirm("Delete status?")) return;
+                    try {
+                      await deleteAdminTicketStatus(s.id);
+                      await refresh();
+                    } catch (e: any) {
+                      toast({ title: "Failed", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  )}
+</TabsContent>
+
         </Tabs>
       </div>
     </MainLayout>

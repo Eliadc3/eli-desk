@@ -24,6 +24,55 @@ export async function deleteDepartment(id: string) {
   return data as { ok: boolean };
 }
 
+export type TicketStatusAdminDto = {
+  id: string;
+  key: string;
+  labelHe: string;
+  color: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  isDefault: boolean;
+};
+
+export async function listAdminTicketStatuses() {
+  const { data } = await api.get("/admin/ticket-statuses");
+  return data.items as TicketStatusAdminDto[];
+}
+
+export async function createAdminTicketStatus(payload: {
+  key: string;
+  labelHe: string;
+  color?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+  isDefault?: boolean;
+}) {
+  const { data } = await api.post("/admin/ticket-statuses", payload);
+  return data as TicketStatusAdminDto;
+}
+
+export async function patchAdminTicketStatus(
+  id: string,
+  payload: Partial<{
+    key: string;
+    labelHe: string;
+    color: string | null;
+    sortOrder: number;
+    isActive: boolean;
+    isDefault: boolean;
+  }>
+) {
+  const { data } = await api.patch(`/admin/ticket-statuses/${id}`, payload);
+  return data as TicketStatusAdminDto;
+}
+
+export async function deleteAdminTicketStatus(id: string) {
+  const { data } = await api.delete(`/admin/ticket-statuses/${id}`);
+  return data as { ok: boolean };
+}
+
+
+
 export type Technician = {
   id: string;
   email: string;

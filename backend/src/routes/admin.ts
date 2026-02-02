@@ -10,6 +10,8 @@ import {
   departmentCreateSchema,
   departmentPatchSchema,
 } from "./schemas.js";
+import { userCtx } from "../lib/userCtx.js";
+
 
 export const adminRouter = Router();
 
@@ -48,6 +50,179 @@ adminRouter.delete("/departments/:id", requirePermission(Permission.DEPT_MANAGE)
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
+
+// Ticket Statuses (per org)
+adminRouter.get(
+  "/ticket-statuses",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const { orgId } = userCtx(req);
+      if (!orgId) throw new HttpError(400, "Missing orgId");
+
+      const items = await prisma.ticketStatus.findMany({
+        where: { orgId },
+        orderBy: [{ sortOrder: "asc" }, { labelHe: "asc" }],
+      });
+
+      res.json({ items });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.post(
+  "/ticket-statuses",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const { orgId } = userCtx(req);
+      if (!orgId) throw new HttpError(400, "Missing orgId");
+
+      const key = String(req.body?.key ?? "").trim();
+      const labelHe = String(req.body?.labelHe ?? "").trim();
+      const colorRaw = req.body?.color;
+      const color = typeof colorRaw === "string" && colorRaw.trim() ? colorRaw.trim() : null;
+
+      const sortOrderNum = Number(req.body?.sortOrder ?? 0);
+      const sortOrder = Number.isFinite(sortOrderNum) ? sortOrderNum : 0;
+
+      const isActive = req.body?.isActive === undefined ? true : Boolean(req.body?.isActive);
+      const isDefault = Boolean(req.body?.isDefault);
+
+      if (!key) throw new HttpError(400, "key is required");
+      if (!labelHe) throw new HttpError(400, "labelHe is required");
+
+      // אם מבקשים להפוך לדיפולט — לבטל דיפולט קודם באותו org
+      if (isDefault) {
+        await prisma.ticketStatus.updateMany({
+          where: { orgId, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+
+      const created = await prisma.ticketStatus.create({
+        data: {
+          orgId,
+          key,
+          labelHe,
+          color,
+          sortOrder,
+          isActive,
+          isDefault,
+        },
+      });
+
+      res.status(201).json(created);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.patch(
+  "/ticket-statuses/:id",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const { orgId } = userCtx(req);
+      if (!orgId) throw new HttpError(400, "Missing orgId");
+
+      const id = req.params.id;
+
+      // הגנה: שלא יעדכן סטטוס של org אחר
+      const exists = await prisma.ticketStatus.findUnique({
+        where: { id },
+        select: { orgId: true },
+      });
+      if (!exists) throw new HttpError(404, "Status not found");
+      if (exists.orgId !== orgId) throw new HttpError(403, "Not allowed");
+
+      const data: any = {};
+
+      if (req.body?.key !== undefined) {
+        const key = String(req.body.key ?? "").trim();
+        if (!key) throw new HttpError(400, "key cannot be empty");
+        data.key = key;
+      }
+
+      if (req.body?.labelHe !== undefined) {
+        const labelHe = String(req.body.labelHe ?? "").trim();
+        if (!labelHe) throw new HttpError(400, "labelHe cannot be empty");
+        data.labelHe = labelHe;
+      }
+
+      if (req.body?.color !== undefined) {
+        const colorRaw = req.body.color;
+        data.color = typeof colorRaw === "string" && colorRaw.trim() ? colorRaw.trim() : null;
+      }
+
+      if (req.body?.sortOrder !== undefined) {
+        const sortOrderNum = Number(req.body.sortOrder);
+        if (!Number.isFinite(sortOrderNum)) throw new HttpError(400, "sortOrder must be a number");
+        data.sortOrder = sortOrderNum;
+      }
+
+      if (req.body?.isActive !== undefined) {
+        data.isActive = Boolean(req.body.isActive);
+      }
+
+      if (req.body?.isDefault !== undefined) {
+        const isDefault = Boolean(req.body.isDefault);
+
+        if (isDefault) {
+          await prisma.ticketStatus.updateMany({
+            where: { orgId, isDefault: true },
+            data: { isDefault: false },
+          });
+        }
+
+        data.isDefault = isDefault;
+      }
+
+      const updated = await prisma.ticketStatus.update({ where: { id }, data });
+      res.json(updated);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.delete(
+  "/ticket-statuses/:id",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const { orgId } = userCtx(req);
+      if (!orgId) throw new HttpError(400, "Missing orgId");
+
+      const id = req.params.id;
+
+      const status = await prisma.ticketStatus.findUnique({
+        where: { id },
+        select: { orgId: true, isDefault: true },
+      });
+      if (!status) throw new HttpError(404, "Status not found");
+      if (status.orgId !== orgId) throw new HttpError(403, "Not allowed");
+
+      // לא מוחקים אם בשימוש
+      const used = await prisma.ticket.count({ where: { statusId: id } });
+      if (used > 0) throw new HttpError(400, "Status is in use");
+
+      // לא מוחקים default (מעדיף לחייב קודם להגדיר דיפולט אחר)
+      if (status.isDefault) throw new HttpError(400, "Cannot delete default status");
+
+      await prisma.ticketStatus.delete({ where: { id } });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+
+
 
 // Assignees
 adminRouter.get("/assignees", requirePermission(Permission.TICKET_REASSIGN), async (_req, res, next) => {

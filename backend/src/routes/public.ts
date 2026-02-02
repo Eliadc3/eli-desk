@@ -3,9 +3,10 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { TicketPriority, TicketSource } from "@prisma/client";
 import { getHospitalDepartments } from "../services/departments.service.js";
-
+import { env } from "../lib/env.js";
 
 const publicRouter = Router();
+const orgId = env.APP_ORG_ID;
 
 function normalizeStr(v: unknown) {
   const s = typeof v === "string" ? v.trim() : "";
@@ -40,20 +41,25 @@ async function getDefaultStatusId(orgId: string) {
 }
 
 async function nextTicketNumber() {
-  // ודא שיש seed שמייצר את Counter ticketNumber, אחרת זה יזרוק
-  const c = await prisma.counter.update({
+  const c = await prisma.counter.upsert({
     where: { key: "ticketNumber" },
-    data: { value: { increment: 1 } },
+    update: { value: { increment: 1 } },
+    create: { key: "ticketNumber", value: 1000 },
     select: { value: true },
   });
   return c.value;
 }
 
-// GET /public/hospital-departments
-publicRouter.get("/hospital-departments", async (_req, res) => {
-  const items = await getHospitalDepartments();
-  return res.json({ items });
+
+publicRouter.get("/hospital-departments", async (_req, res, next) => {
+  try {
+    const items = await getHospitalDepartments();
+    res.json({ items });
+  } catch (e) {
+    next(e);
+  }
 });
+
 
 
 
@@ -70,8 +76,6 @@ publicRouter.post("/tickets", async (req, res) => {
       });
     }
 
-    // ⚠️ אם יש לך org אמיתי – עדיף להביא orgId מהקליינט/קונפיג ולא hardcode
-    const orgId = String(req.body?.orgId ?? "demo-org").trim();
     const priority = normalizePriority(req.body?.priority);
 
     const externalRequesterName = normalizeStr(req.body?.name ?? req.body?.externalRequesterName);

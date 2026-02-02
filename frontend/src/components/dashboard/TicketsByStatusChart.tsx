@@ -9,11 +9,7 @@ import {
   Tooltip,
 } from "recharts";
 import { listTickets } from "@/api/tickets";
-import {
-  STATUS_CONFIG,
-  normalizeTicketStatus,
-  TicketStatus,
-} from "@/lib/ticketStatus";
+import { useTicketStatuses } from "@/hooks/useTicketStatuses";
 
 const RtlLegend = ({ payload }: any) => {
   if (!payload?.length) return null;
@@ -25,16 +21,14 @@ const RtlLegend = ({ payload }: any) => {
           key={i}
           style={{
             display: "flex",
-            flexDirection: "row-reverse", // ← הקובייה לפני הטקסט
+            flexDirection: "row-reverse",
             alignItems: "center",
             justifyContent: "flex-end",
             gap: 8,
             marginBottom: 8,
           }}
         >
-          <span style={{ fontSize: 14 }}>
-            {entry.value}
-          </span>
+          <span style={{ fontSize: 14 }}>{entry.value}</span>
           <span
             style={{
               width: 12,
@@ -44,13 +38,11 @@ const RtlLegend = ({ payload }: any) => {
               flexShrink: 0,
             }}
           />
-
         </div>
       ))}
     </div>
   );
 };
-
 
 const RtlTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
@@ -82,38 +74,53 @@ export function TicketsByStatusChart() {
     queryFn: () => listTickets(),
   });
 
+  const statusesQ = useTicketStatuses();
+
   const data = useMemo(() => {
+    const statuses = statusesQ.data ?? [];
     const raw: any = q.data;
 
     const tickets: any[] =
       Array.isArray(raw) ? raw :
-        Array.isArray(raw?.items) ? raw.items :
-          Array.isArray(raw?.data) ? raw.data :
-            Array.isArray(raw?.tickets) ? raw.tickets :
-              [];
+      Array.isArray(raw?.items) ? raw.items :
+      Array.isArray(raw?.data) ? raw.data :
+      Array.isArray(raw?.tickets) ? raw.tickets :
+      [];
 
-    const counts: Record<TicketStatus, number> = {
-      new: 0,
-      "in-progress": 0,
-      waiting: 0,
-      resolved: 0,
-      closed: 0,
-    };
-
-    for (const t of tickets) {
-      const key = normalizeTicketStatus(t?.status);
-      counts[key]++;
+    // init counts per known statuses
+    const counts: Record<string, number> = {};
+    for (const s of statuses) {
+      counts[String(s.key).trim().toUpperCase()] = 0;
     }
 
-    return (Object.keys(STATUS_CONFIG) as TicketStatus[])
-      .map((key) => ({
-        key,
-        name: STATUS_CONFIG[key].label,
-        value: counts[key],
-        color: STATUS_CONFIG[key].color,
-      }))
+    // count tickets
+    for (const t of tickets) {
+      const key =
+        typeof t.status === "string"
+          ? t.status
+          : (t.status?.key ?? t.statusKey ?? "");
+
+      const k = String(key).trim().toUpperCase();
+      if (!k) continue;
+
+      if (counts[k] === undefined) counts[k] = 0;
+      counts[k]++;
+    }
+
+    return statuses
+      .map((s) => {
+        const k = String(s.key).trim().toUpperCase();
+        return {
+          key: k,
+          name: s.labelHe,
+          value: counts[k] ?? 0,
+          color: s.color ?? "#6B7280",
+        };
+      })
       .filter((x) => x.value > 0);
-  }, [q.data]);
+  }, [q.data, statusesQ.data]);
+
+  const isLoading = q.isLoading || statusesQ.isLoading;
 
   return (
     <div className="bg-card rounded-lg p-5 border border-border shadow-card">
@@ -122,8 +129,10 @@ export function TicketsByStatusChart() {
       </h3>
 
       <div className="h-64">
-        {q.isLoading ? (
+        {isLoading ? (
           <div className="text-sm text-muted-foreground">טוען נתונים...</div>
+        ) : (statusesQ.data?.length ?? 0) === 0 ? (
+          <div className="text-sm text-muted-foreground">אין סטטוסים פעילים במערכת</div>
         ) : data.length === 0 ? (
           <div className="text-sm text-muted-foreground">אין נתונים להצגה</div>
         ) : (
@@ -131,7 +140,7 @@ export function TicketsByStatusChart() {
             <PieChart>
               <Pie
                 data={data}
-                cx="38%"          // מפנה מקום למקרא מימין
+                cx="38%"
                 cy="50%"
                 innerRadius={50}
                 outerRadius={80}
