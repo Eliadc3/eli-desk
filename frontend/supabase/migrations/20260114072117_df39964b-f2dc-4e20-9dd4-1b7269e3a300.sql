@@ -7,7 +7,6 @@ CREATE TYPE public.app_role AS ENUM ('admin', 'technician', 'customer');
 CREATE TABLE public.organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  email TEXT,
   phone TEXT,
   address TEXT,
   notes TEXT,
@@ -29,7 +28,6 @@ CREATE TABLE public.sites (
 -- Profiles (extends auth.users)
 CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
   full_name TEXT,
   avatar_url TEXT,
   phone TEXT,
@@ -306,8 +304,8 @@ CREATE POLICY "Admins/technicians can manage KB" ON public.kb_articles FOR ALL T
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
-  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email));
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name'));
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

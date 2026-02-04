@@ -152,11 +152,11 @@ export default function NewTicket() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-sm">שם פותח הקריאה (לקוח)</label>
+                <label className="text-sm">שם</label>
                 <Input
                   value={draft.externalRequesterName}
                   onChange={(e) => setDraft((d) => ({ ...d, externalRequesterName: e.target.value }))}
-                  placeholder="שם מלא"
+                  placeholder="שם"
                 />
               </div>
 
@@ -184,10 +184,9 @@ export default function NewTicket() {
                     </option>
                   ))}
                 </select>
-                {!!deptName && <div className="text-xs text-muted-foreground">{deptName}</div>}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-col gap-3">
                 <div className="space-y-2">
                   <label className="text-sm">סטטוס</label>
                   <select
@@ -198,21 +197,6 @@ export default function NewTicket() {
                     {statuses.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.labelHe}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm">עדיפות</label>
-                  <select
-                    className="w-full border rounded-md p-2 bg-background"
-                    value={draft.priority}
-                    onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value }))}
-                  >
-                    {priorities.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
                       </option>
                     ))}
                   </select>

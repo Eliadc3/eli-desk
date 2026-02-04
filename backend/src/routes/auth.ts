@@ -11,7 +11,7 @@ export const authRouter = Router();
 authRouter.post("/login", async (req, res, next) => {
   try {
     const body = loginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: body.email }, include: { org: true } });
+    const user = await prisma.user.findUnique({ where: { username: body.username }, include: { org: true } });
     if (!user) throw new HttpError(401, "Invalid credentials");
     const ok = await bcrypt.compare(body.password, user.passwordHash);
     if (!ok) throw new HttpError(401, "Invalid credentials");
@@ -21,7 +21,7 @@ authRouter.post("/login", async (req, res, next) => {
     const refreshToken = signRefreshToken(payload);
 
     res.json({
-      user: { id: user.id, email: user.email, name: user.name, role: user.role, orgId: user.orgId },
+      user: { id: user.id, name: user.name, role: user.role, orgId: user.orgId },
       accessToken,
       refreshToken,
     });
@@ -59,7 +59,7 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
 
     res.json({
       id: user.id,
-      email: user.email,
+      username: user.username,
       name: user.name,
       role: user.role,
       orgId: user.orgId,

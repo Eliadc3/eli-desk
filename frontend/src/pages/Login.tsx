@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Login() {
-  const [email, setEmail] = useState("admin@eli-desk.local");
+  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("admin1234");
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
@@ -17,7 +17,7 @@ export default function Login() {
   const onLogin = async () => {
     setBusy(true);
     try {
-      await auth.login(email, password);
+      await auth.login(username, password);
       toast({ title: "Logged in" });
       nav("/tickets");
     } catch (e: any) {
@@ -36,8 +36,8 @@ export default function Login() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm">Email</label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" />
+            <label className="text-sm">Username</label>
+            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
           </div>
           <div className="space-y-2">
             <label className="text-sm">Password</label>

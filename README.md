@@ -16,7 +16,7 @@ npm run dev
 
 What it does:
 - installs deps in **backend** and **frontend**
-- runs Prisma generate + migrate + seed
+- runs Prisma generate + migrate 
 - starts backend (port **3001**) and frontend (port **5173** by default)
 
 ### Option B — two terminals (more explicit)
@@ -27,7 +27,6 @@ cp .env.example .env   # first time only
 npm install
 npm run prisma:generate
 npm run prisma:migrate
-npm run seed
 npm run dev
 ```
 
@@ -43,11 +42,6 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend:  `http://localhost:3001`
 - Health check: `http://localhost:3001/health`
-
-## Demo users (seed)
-- Admin: `admin@eli-desk.local` / `admin1234`
-- Tech:  `tech1@eli-desk.local` / `tech1234`
-- Cust:  `customer@eli-desk.local` / `cust1234`
 
 ## CORS note (important)
 Backend reads `CORS_ORIGIN` from `backend/.env`.

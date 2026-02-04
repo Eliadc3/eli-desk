@@ -1,5 +1,7 @@
 import { api } from "./client";
 import type { Permission } from "./auth";
+import axios from "axios";
+import { translateBackendError } from "../utils/backendErrorTranslator";
 
 export type DepartmentType = "TECH" | "HOSPITAL";
 export type Department = { id: string; name: string; type: DepartmentType };
@@ -28,7 +30,7 @@ export type TicketStatusAdminDto = {
   id: string;
   key: string;
   labelHe: string;
-  color: string | null;
+  color?: string | null;
   sortOrder: number;
   isActive: boolean;
   isDefault: boolean;
@@ -75,10 +77,10 @@ export async function deleteAdminTicketStatus(id: string) {
 
 export type Technician = {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: string;
-  techDepartmentId: string | null;
+  techDepartmentId: string ;
   permissions: { perm: Permission }[];
 };
 
@@ -88,10 +90,10 @@ export async function listTechnicians() {
 }
 
 export async function createTechnician(payload: {
-  email: string;
   name: string;
+  username: string;
   password: string;
-  techDepartmentId?: string | null;
+  techDepartmentId: string ;
   permissions?: Permission[];
 }) {
   const { data } = await api.post("/admin/technicians", payload);
@@ -107,8 +109,19 @@ export async function patchTechnician(
 }
 
 export async function deleteTechnician(id: string) {
-  const { data } = await api.delete(`/admin/technicians/${id}`);
-  return data as { ok: boolean };
+  try {
+    const { data } = await api.delete(`/admin/technicians/${id}`);
+    return data as { ok: boolean };
+  } catch (err: any) {
+    if (axios.isAxiosError(err)) {
+      const backendMessage =
+        err.response?.data?.error || "פעולה נכשלה";
+
+      throw new Error(translateBackendError(backendMessage));
+    }
+
+    throw err;
+  }
 }
 
 export async function reassignTicket(id: string, assigneeId: string) {
@@ -129,7 +142,6 @@ export async function deleteTicket(id: string) {
 export type AssigneeLite = {
   id: string;
   name: string;
-  email: string;
 };
 
 export async function listAssignees() {

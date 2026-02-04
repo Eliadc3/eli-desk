@@ -484,7 +484,7 @@ export default function TicketDetail() {
                           <SelectItem value="__none__">Unassigned</SelectItem>
                           {assignees.map((u) => (
                             <SelectItem key={u.id} value={u.id}>
-                              {u.name} ({u.email})
+                              {u.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

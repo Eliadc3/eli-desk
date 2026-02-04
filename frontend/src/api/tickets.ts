@@ -4,7 +4,7 @@ export type TicketStatus = "NEW" | "IN_PROGRESS" | "WAITING" | "RESOLVED" | "CLO
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type TicketSource = "TECHNICIAN" | "PORTAL" | "PUBLIC";
 
-export type UserLite = { id: string; name: string; email: string };
+export type UserLite = { id: string; name: string; };
 export type DepartmentLite = { id: string; name: string; type: "HOSPITAL" | "TECH" };
 
 export type Ticket = {

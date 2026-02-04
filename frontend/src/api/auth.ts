@@ -10,15 +10,15 @@ export type Permission =
 
 export type Me = {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: Role;
   orgId: string | null;
   permissions: Permission[];
 };
 
-export async function login(email: string, password: string) {
-  const { data } = await api.post("/auth/login", { email, password });
+export async function login( username: string, password: string) {
+  const { data } = await api.post("/auth/login", { username, password });
   const accessToken: string = data.accessToken;
   localStorage.setItem("accessToken", accessToken);
   setAuthToken(accessToken);

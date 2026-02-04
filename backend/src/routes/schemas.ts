@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TicketPriority } from "@prisma/client";
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  username: z.string().min(2),
   password: z.string().min(4),
 });
 
@@ -54,10 +54,10 @@ export const publicTicketCreateSchema = z.object({
 
 // Technicians (Admin)
 export const technicianCreateSchema = z.object({
-  email: z.string().email(),
+  username: z.string().min(2),
   name: z.string().min(2),
   password: z.string().min(6),
-  techDepartmentId: z.string().optional().nullable(),
+  techDepartmentId: z.string().min(1),
   permissions: z
     .array(
       z.enum([
@@ -73,6 +73,7 @@ export const technicianCreateSchema = z.object({
 
 export const technicianPatchSchema = z.object({
   name: z.string().min(2).optional(),
+  username: z.string().min(2).optional(),
   password: z.string().min(6).optional(),
   techDepartmentId: z.string().optional().nullable(),
   permissions: z
@@ -96,4 +97,24 @@ export const departmentCreateSchema = z.object({
 
 export const departmentPatchSchema = z.object({
   name: z.string().min(2).optional(),
+});
+
+export const ticketStatusCreateSchema = z.object({
+  key: z.string().trim().min(1).max(50).transform((v) => v.toUpperCase()),
+  labelHe: z.string().trim().min(1).max(100),
+  color: z.string().trim().regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/).optional().nullable(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export const ticketStatusPatchSchema = z.object({
+  key: z.string().trim().min(1).max(50).transform((v) => v.toUpperCase()).optional(),
+  labelHe: z.string().trim().min(1).max(100).optional(),
+  color: z
+    .union([z.string().trim().regex(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/), z.null()])
+    .optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
 });

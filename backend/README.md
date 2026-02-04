@@ -1,6 +1,6 @@
 # eli-desk-backend
 
-Backend minimal for Eli-Desk: Auth (JWT), RBAC, Tickets (open/closed), Resolution fields, Demo seed/reset, Label printing endpoint.
+Backend minimal for Eli-Desk: Auth (JWT), RBAC, Tickets (open/closed), Resolution fields, Label printing endpoint.
 
 ## Requirements
 - Node 18+ (recommended 20)
@@ -18,10 +18,9 @@ npm install
 cp .env.example .env
 ```
 
-3) Init DB (SQLite) + seed:
+3) Init DB (SQLite) :
 ```bash
 npm run prisma:migrate
-npm run seed
 ```
 
 4) Run:
@@ -41,7 +40,6 @@ npm run dev
 - PATCH /tickets/:id (resolutionSummary required when resolving/closing)
 - GET /label/:id?size=a6|small (HTML print page)
 - POST /demo/reset (Admin)
-- POST /demo/seed?count=50 (Admin)
 
 ## Public ticket (no login)
 - POST /public/tickets {subject,description,priority?,name?,email?,phone?,orgId?}

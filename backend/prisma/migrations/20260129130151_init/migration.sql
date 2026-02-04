@@ -13,7 +13,7 @@ CREATE TABLE "TicketStatus" (
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "email" TEXT NOT NULL,
+    "username" TEXT NOT NULL UNIQUE,
     "name" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'TECHNICIAN',
@@ -103,9 +103,6 @@ CREATE TABLE "Counter" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "TicketStatus_orgId_key_key" ON "TicketStatus"("orgId", "key");
-
--- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE INDEX "UserPermission_userId_idx" ON "UserPermission"("userId");

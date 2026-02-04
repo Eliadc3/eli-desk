@@ -184,7 +184,7 @@ dashboardRouter.get("/summary", async (req, res, next) => {
             }),
             prisma.user.findMany({
                 where: { role: Role.TECHNICIAN },
-                select: { id: true, name: true },
+                select: { id: true, name: true, username: true },
                 orderBy: { name: "asc" },
             }),
         ]);

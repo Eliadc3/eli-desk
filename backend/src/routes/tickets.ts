@@ -43,7 +43,7 @@ ticketsRouter.get("/", async (req, res, next) => {
         include: {
           requester: { select: { id: true, name: true} },
           hospitalDepartment: { select: { id: true, name: true, type: true } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignee: { select: { id: true, name: true } },
           status: { select: { id: true, key: true, labelHe: true, color: true } },
         },
       }),
@@ -67,8 +67,8 @@ ticketsRouter.get("/:id", async (req, res, next) => {
         org: true,
         requester: { select: { id: true, name: true, } },
         hospitalDepartment: { select: { id: true, name: true, type: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        resolvedBy: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true } },
+        resolvedBy: { select: { id: true, name: true } },
         status: { select: { id: true, key: true, labelHe: true, color: true } },
         activities: {
           orderBy: { createdAt: "asc" },
@@ -233,7 +233,7 @@ ticketsRouter.patch("/:id", async (req, res, next) => {
       include: {
         requester: { select: { id: true, name: true } },
         hospitalDepartment: { select: { id: true, name: true, type: true } },
-        assignee: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true } },
       },
     });
 

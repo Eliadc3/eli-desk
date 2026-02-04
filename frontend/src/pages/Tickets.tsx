@@ -83,7 +83,6 @@ export default function Tickets() {
       if (!me) return out;
 
       const myId = (me as any).id;
-      const myEmail = String((me as any).email ?? "").toLowerCase();
       const myName = String((me as any).name ?? "").toLowerCase();
 
       out = out.filter((t: any) => {
@@ -91,10 +90,8 @@ export default function Tickets() {
         if (t.assigneeId && myId) return String(t.assigneeId) === String(myId);
         if (t.assignee?.id && myId) return String(t.assignee.id) === String(myId);
 
-        // fallback זמני: email/name (רק כדי שזה יעבוד אם אין id)
-        const aEmail = String(t.assignee?.email ?? "").toLowerCase();
+        // fallback זמני: name (רק כדי שזה יעבוד אם אין id)
         const aName = String(t.assignee?.name ?? "").toLowerCase();
-        if (myEmail && aEmail) return aEmail === myEmail;
         if (myName && aName) return aName === myName;
 
         return false;
@@ -117,7 +114,6 @@ export default function Tickets() {
           t.externalRequesterName ?? "",
           t.department?.name ?? "",
           t.assignee?.name ?? "",
-          t.assignee?.email ?? "",
         ]
           .join(" ")
           .toLowerCase();

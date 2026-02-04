@@ -119,13 +119,13 @@ export function Sidebar() {
         )}>
           <div className="w-8 h-8 rounded-full bg-sidebar-primary flex items-center justify-center flex-shrink-0">
             <span className="text-sm font-medium text-sidebar-primary-foreground">
-                {(me?.name?.[0] ?? me?.email?.[0] ?? "U").toUpperCase()}
+                {(me?.name?.[0] ?? "U").toUpperCase()}
             </span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">
-                 {me?.name ?? me?.email ?? "משתמש"}
+                 {me?.name ?? "משתמש"}
               </p>
               <p className="text-xs text-sidebar-foreground/60 truncate">
                  {me?.role === "SUPER_ADMIN" ? "סופר אדמין" : me?.role === "ADMIN" ? "מנהל מערכת" : "משתמש"}
