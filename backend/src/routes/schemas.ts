@@ -7,28 +7,37 @@ export const loginSchema = z.object({
 });
 
 // Tickets
-export const ticketCreateSchema = z.object({
-  hospitalDepartmentId: z.string().min(1),
-  subject: z.string().min(3),
-  description: z.string().min(1),
-  priority: z.nativeEnum(TicketPriority).optional(),
+export const ticketCreateSchema = z
+  .object({
+    hospitalDepartmentId: z.string().min(1),
+    subject: z.string().min(3),
+    description: z.string().min(1),
+    priority: z.nativeEnum(TicketPriority),
+    statusId: z.string().min(1),
 
-  // Status is now dynamic (table) => send statusId
-  statusId: z.string().min(1).optional(),
+    requesterId: z.string().optional().nullable(),
+    externalRequesterName: z.string().optional().nullable(),
+    externalRequesterPhone: z.string().optional().nullable(),
 
-  orgId: z.string().optional(),
-  requesterId: z.string().optional(),
-  assigneeId: z.string().optional(),
+    assigneeId: z.string().optional().nullable(),
+  })
+  .superRefine((val, ctx) => {
+    const hasRequesterId = !!(val.requesterId && String(val.requesterId).trim());
+    const hasExternal =
+      !!(val.externalRequesterName && String(val.externalRequesterName).trim().length >= 2) &&
+      !!(val.externalRequesterPhone && String(val.externalRequesterPhone).trim().length >= 6);
 
-  // Optional requester details (used by internal technicians too)
-  externalRequesterName: z.string().min(2).optional(),
-  externalRequesterPhone: z.string().min(4).optional(),
-});
+    if (!hasRequesterId && !hasExternal) {
+      ctx.addIssue({ code: "custom", path: ["requesterId"], message: "חובה לבחור פונה או למלא שם+טלפון" });
+    }
+  });
 
 export const ticketPatchSchema = z.object({
   subject: z.string().min(3).optional(),
   description: z.string().min(1).optional(),
   priority: z.nativeEnum(TicketPriority).optional(),
+  externalRequesterName: z.string().min(2),
+  externalRequesterPhone: z.string().min(4),
 
   // Status is now dynamic (table) => send statusId
   statusId: z.string().min(1).optional(),
@@ -38,8 +47,6 @@ export const ticketPatchSchema = z.object({
   notes: z.string().nullable().optional(),
   resolutionSummary: z.string().nullable().optional(),
   resolutionDetails: z.string().nullable().optional(),
-  externalRequesterName: z.string().min(2).nullable().optional(),
-  externalRequesterPhone: z.string().min(6).nullable().optional(),
 });
 
 export const publicTicketCreateSchema = z.object({
@@ -47,8 +54,8 @@ export const publicTicketCreateSchema = z.object({
   subject: z.string().min(3),
   description: z.string().min(1),
   priority: z.nativeEnum(TicketPriority).optional(),
-  name: z.string().min(2).optional(),
-  phone: z.string().min(4).optional(),
+  externalRequesterName: z.string().min(2),
+  externalRequesterPhone: z.string().min(4),
   orgId: z.string().optional(),
 });
 

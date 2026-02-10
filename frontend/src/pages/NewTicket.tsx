@@ -172,7 +172,7 @@ export default function NewTicket() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-sm">מחלקה מדווחת *</label>
+                <label className="text-sm">מחלקה מדווחת</label>
                 <select
                   className="w-full border rounded-md p-2 bg-background"
                   value={draft.hospitalDepartmentId}
@@ -205,7 +205,7 @@ export default function NewTicket() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm">נושא *</label>
+              <label className="text-sm">נושא</label>
               <Input
                 value={draft.subject}
                 onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
@@ -214,7 +214,7 @@ export default function NewTicket() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm">תיאור *</label>
+              <label className="text-sm">תיאור</label>
               <Textarea
                 value={draft.description}
                 onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}

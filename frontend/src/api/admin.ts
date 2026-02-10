@@ -1,16 +1,14 @@
 import { api } from "./client";
 import type { Permission } from "./auth";
-import axios from "axios";
-import { translateBackendError } from "../utils/backendErrorTranslator";
 
 export type DepartmentType = "TECH" | "HOSPITAL";
 export type Department = { id: string; name: string; type: DepartmentType };
 
-export async function listDepartments() {
-  const { data } = await api.get("/admin/departments");
-  return data.items as Department[];
+export async function listDepartments(params?: { active?: boolean }) {
+  const active = params?.active ?? true;
+  const res = await api.get("/admin/departments", { params: { active } });
+  return res.data.items;
 }
-
 export async function createDepartment(payload: { name: string; type: DepartmentType }) {
   const { data } = await api.post("/admin/departments", payload);
   return data as Department;
@@ -21,10 +19,16 @@ export async function patchDepartment(id: string, payload: { name?: string }) {
   return data as Department;
 }
 
-export async function deleteDepartment(id: string) {
-  const { data } = await api.delete(`/admin/departments/${id}`);
-  return data as { ok: boolean };
+export async function disableDepartment(id: string) {
+  const res = await api.delete(`/admin/departments/${id}`);
+  return res.data;
 }
+
+export async function enableDepartment(id: string) {
+  const res = await api.post(`/admin/departments/${id}/enable`);
+  return res.data;
+}
+
 
 export type TicketStatusAdminDto = {
   id: string;
@@ -84,9 +88,11 @@ export type Technician = {
   permissions: { perm: Permission }[];
 };
 
-export async function listTechnicians() {
-  const { data } = await api.get("/admin/technicians");
-  return data.items as Technician[];
+// ✅ Technicians
+export async function listTechnicians(params?: { active?: boolean }) {
+  const active = params?.active ?? true;
+  const res = await api.get("/admin/technicians", { params: { active } });
+  return res.data.items;
 }
 
 export async function createTechnician(payload: {
@@ -108,20 +114,14 @@ export async function patchTechnician(
   return data;
 }
 
-export async function deleteTechnician(id: string) {
-  try {
-    const { data } = await api.delete(`/admin/technicians/${id}`);
-    return data as { ok: boolean };
-  } catch (err: any) {
-    if (axios.isAxiosError(err)) {
-      const backendMessage =
-        err.response?.data?.error || "פעולה נכשלה";
+export async function disableTechnician(id: string) {
+  const res = await api.delete(`/admin/technicians/${id}`);
+  return res.data;
+}
 
-      throw new Error(translateBackendError(backendMessage));
-    }
-
-    throw err;
-  }
+export async function enableTechnician(id: string) {
+  const res = await api.post(`/admin/technicians/${id}/enable`);
+  return res.data;
 }
 
 export async function reassignTicket(id: string, assigneeId: string) {

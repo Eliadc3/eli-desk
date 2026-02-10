@@ -1,5 +1,10 @@
-export function translateBackendError(msg: string): string {
-  let out = msg;
+export function translateBackendError(err: any): string {
+  const data = err?.response?.data ?? err; 
+let out =
+  typeof err === "string"
+    ? err
+    : data?.message || data?.error || err?.message || "שגיאה";
+
 
   const FIELD_MAP: Record<string, string> = {
   username: "שם משתמש",
@@ -11,6 +16,27 @@ export function translateBackendError(msg: string): string {
   description: "תיאור",
   resolutionSummary: "סיכום פתרון",
 };
+
+// Prisma P2002 (Unique)
+if (
+  (data?.code === "P2002" || /Unique constraint failed/i.test(String(data?.error ?? ""))) &&
+  data?.details &&
+  Array.isArray(data.details.target)
+) {
+  const fieldMap: Record<string, string> = {
+    name: "שם",
+    type: "סוג",
+    username: "שם משתמש",
+    externalRequesterPhone: "טלפון",
+    externalRequesterName: "שם",
+    hospitalDepartmentId: "מחלקה",
+    subject: "נושא",
+    description: "תיאור",
+    resolutionSummary: "סיכום פתרון",
+  };
+
+  out = `כבר קיים שם זהה, יש לבחור שם אחר`;
+}
 
 
   Object.entries(FIELD_MAP).forEach(([key, label]) => {
@@ -25,7 +51,7 @@ export function translateBackendError(msg: string): string {
     .replace(/Technician has assigned tickets; reassign first/i,
   "לא ניתן למחוק טכנאי שיש לו קריאות משויכות. יש לבטל שיוך או להעביר את הקריאות לטכנאי אחר.")
     .replace(/Username already exists/i, "שם המשתמש כבר קיים. בחר שם משתמש אחר.")
-    .replace(/Permission already assigned/i, "ההרשאה כבר משויכת למשתמש.");
+    .replace(/Permission already assigned/i, "ההרשאה כבר משויכת למשתמש.")
 ;
 
   return out;

@@ -31,7 +31,7 @@ export default function PublicNewTicket() {
     if (!hospitalDepartmentId || !subject.trim() || !description.trim()) {
       toast({
         title: "Missing fields",
-        description: "Department, subject and description are required",
+        description:  "All fields are required",
         variant: "destructive",
       });
       return;
@@ -87,7 +87,7 @@ export default function PublicNewTicket() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <label className="text-sm">שם</label>
+              <label className="text-sm">שם *</label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-2">

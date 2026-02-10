@@ -92,7 +92,7 @@ ticketsRouter.post("/", async (req, res, next) => {
     const body = ticketCreateSchema.parse(req.body);
 
     // enforce org rules
-    let finalOrgId = body.orgId ?? orgId ?? null;
+    let finalOrgId = orgId ?? null;
     if (role === Role.CUSTOMER) {
       if (!orgId) throw new HttpError(403, "Customer missing orgId");
       finalOrgId = orgId;
@@ -114,7 +114,7 @@ ticketsRouter.post("/", async (req, res, next) => {
         number,
         subject: body.subject,
         description: body.description,
-        priority: body.priority,
+        // priority: body.priority,
         statusId: statusIdToUse,
         orgId: finalOrgId,
         // IMPORTANT: we do NOT force requesterId=sub for technicians.

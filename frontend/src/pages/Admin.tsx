@@ -10,16 +10,18 @@ import { hasAnyPermission, useAuth } from "@/context/AuthContext";
 import {
   listDepartments,
   createDepartment,
-  deleteDepartment,
+  disableDepartment,
   patchDepartment,
   listTechnicians,
   createTechnician,
   patchTechnician,
-  deleteTechnician,
+  disableTechnician,
   listAdminTicketStatuses,
   createAdminTicketStatus,
   patchAdminTicketStatus,
   deleteAdminTicketStatus,
+  enableDepartment,
+  enableTechnician,
 } from "@/api/admin";
 import type { Permission } from "@/api/auth";
 import { listTechDepartments } from "@/api/departments";
@@ -36,10 +38,14 @@ const PERMS: { key: Permission; label: string }[] = [
 
 type AdminTab = "departments" | "technicians" | "ticket-statuses";
 type DeptSubTab = "hospital" | "tech";
+type ActiveView = "active" | "archived";
 
 export default function Admin() {
   const { me } = useAuth();
   const { toast } = useToast();
+
+  const [search, setSearch] = useState("");
+
 
   const canTech = hasAnyPermission(me, ["TECH_MANAGE"]);
   const canDept = hasAnyPermission(me, ["DEPT_MANAGE"]);
@@ -52,6 +58,7 @@ export default function Admin() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [newDeptName, setNewDeptName] = useState("");
   const [newDeptType, setNewDeptType] = useState<"TECH" | "HOSPITAL">("HOSPITAL");
+  const [deptView, setDeptView] = useState<ActiveView>("active");
 
   // Technicians
   const [techs, setTechs] = useState<any[]>([]);
@@ -62,6 +69,23 @@ export default function Admin() {
     techDepartmentId: "",
     permissions: [],
   });
+  const [techView, setTechView] = useState<ActiveView>("active");
+
+  const deptActiveFlag = deptView === "active";  // ✅ פעיל => true
+  const techActiveFlag = techView === "active";  // ✅ פעיל => true
+
+  // Search
+  const [deptSearch, setDeptSearch] = useState("");
+  const [techSearch, setTechSearch] = useState("");
+  const [statusSearch, setStatusSearch] = useState("");
+  // Search + navigation
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
+
+
+  // For "active/inactive" lookup while searching
+  const [departmentsAll, setDepartmentsAll] = useState<any[]>([]);
+  const [techsAll, setTechsAll] = useState<any[]>([]);
 
   const canCreateTech =
     String(newTech.name ?? "").trim().length >= 2 &&
@@ -89,26 +113,44 @@ export default function Admin() {
 
   const refreshDepartments = async () => {
     if (!canDept) return;
-    const d = await listDepartments();
-    setDepartments(d ?? []);
+    const d = await listDepartments({ active: deptActiveFlag });
+    setDepartments((d ?? []).map((x: any) => ({ ...x, __active: deptActiveFlag })));
+    const [activeList, inactiveList] = await Promise.all([
+      listDepartments({ active: true }),
+      listDepartments({ active: false }),
+    ]);
+
+    setDepartmentsAll([
+      ...((activeList ?? []).map((x: any) => ({ ...x, __active: true })) as any[]),
+      ...((inactiveList ?? []).map((x: any) => ({ ...x, __active: false })) as any[]),
+    ]);
   };
 
   const refreshTechs = async () => {
     if (!canTech) return;
 
-    const list = await listTechnicians();
-    setTechs(list ?? []);
+    const list = await listTechnicians({ active: techActiveFlag }); // ✅ לא deptActiveFlag
+    setTechs((list ?? []).map((x: any) => ({ ...x, __active: techActiveFlag })));
+    const [activeList, inactiveList] = await Promise.all([
+      listTechnicians({ active: true }),
+      listTechnicians({ active: false }),
+    ]);
+
+    setTechsAll([
+      ...((activeList ?? []).map((x: any) => ({ ...x, __active: true })) as any[]),
+      ...((inactiveList ?? []).map((x: any) => ({ ...x, __active: false })) as any[]),
+    ]);
+
 
     const init: Record<string, Permission[]> = {};
-    for (const t of list ?? []) {
-      init[t.id] = (t.permissions ?? []).map((x: any) => x.perm);
-    }
+    for (const t of list ?? []) init[t.id] = (t.permissions ?? []).map((x: any) => x.perm);
     setPermDraft(init);
     setPermDirty({});
 
     const td = await listTechDepartments();
     setTechDepts((td ?? []).map((x: any) => ({ id: x.id, name: x.name })));
   };
+
 
   const refreshStatuses = async () => {
     if (!canStatuses) return;
@@ -132,10 +174,135 @@ export default function Admin() {
 
   if (!me) return null;
 
+  useEffect(() => {
+    if (tab === "departments") refreshDepartments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deptView]);
+
+  useEffect(() => {
+    if (tab === "technicians") refreshTechs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [techView]);
+
+
+  // ===== Search helpers =====
+  const isDeptActive = (d: any) => {
+    if (typeof d?.__active === "boolean") return d.__active;
+    return true;
+  };
+
+  const isTechActive = (t: any) => {
+    if (typeof t?.__active === "boolean") return t.__active;
+    return true;
+  };
+
+  // Per-tab filtered lists
+  const deptQuery = deptSearch.trim().toLowerCase();
+  const departmentsToRender = (deptQuery ? departmentsAll : departments)
+    .filter((d) => d.type === (deptTab === "hospital" ? "HOSPITAL" : "TECH"))
+    .filter((d) => (deptQuery ? String(d?.name ?? "").toLowerCase().includes(deptQuery) : true));
+
+  const techQuery = techSearch.trim().toLowerCase();
+  const techsToRender = (techQuery ? techsAll : techs).filter((t) => {
+    if (!techQuery) return true;
+    const name = String(t?.name ?? "").toLowerCase();
+    const username = String(t?.username ?? "").toLowerCase();
+    const deptName = String(t?.techDepartment?.name ?? "").toLowerCase();
+    return name.includes(techQuery) || username.includes(techQuery) || deptName.includes(techQuery);
+  });
+
+  const statusQuery = statusSearch.trim().toLowerCase();
+  const statusesToRender = (statuses ?? []).filter((s) => {
+    if (!statusQuery) return true;
+    const d = statusDraft[s.id] ?? s;
+    const key = String(d?.key ?? "").toLowerCase();
+    const labelHe = String(d?.labelHe ?? "").toLowerCase();
+    return key.includes(statusQuery) || labelHe.includes(statusQuery);
+  });
+
+  // Global search that navigates to the correct tab + active/inactive view and scrolls to the item
+  const navigateSearch = async (raw: string) => {
+    const q = raw.trim().toLowerCase();
+    if (!q) return;
+
+    // ensure "all lists" loaded for routing
+    if (departmentsAll.length === 0 || techsAll.length === 0) {
+      await Promise.all([refreshDepartments(), refreshTechs()]);
+    }
+
+    const dept = (departmentsAll ?? []).find((d) => String(d?.name ?? "").toLowerCase().includes(q));
+    if (dept) {
+      const active = isDeptActive(dept);
+      setTab("departments");
+      setDeptTab(dept.type === "TECH" ? "tech" : "hospital");
+      setDeptView(active ? "active" : "archived");
+      setDeptSearch(raw);
+      setPendingScrollId(`dept-${dept.id}`);
+      return;
+    }
+
+    const tech = (techsAll ?? []).find((t) => {
+      const name = String(t?.name ?? "").toLowerCase();
+      const username = String(t?.username ?? "").toLowerCase();
+      const deptName = String(t?.techDepartment?.name ?? "").toLowerCase();
+      return name.includes(q) || username.includes(q) || deptName.includes(q);
+    });
+    if (tech) {
+      const active = isTechActive(tech);
+      setTab("technicians");
+      setTechView(active ? "active" : "archived");
+      setTechSearch(raw);
+      setPendingScrollId(`tech-${tech.id}`);
+      return;
+    }
+
+    if ((statuses ?? []).length === 0) await refreshStatuses();
+
+    const st = (statuses ?? []).find((s) => {
+      const d = statusDraft?.[s.id] ?? s;
+      const key = String(d?.key ?? "").toLowerCase();
+      const labelHe = String(d?.labelHe ?? "").toLowerCase();
+      return key.includes(q) || labelHe.includes(q);
+    });
+    if (st) {
+      setTab("ticket-statuses");
+      setStatusSearch(raw);
+      setPendingScrollId(`status-${st.id}`);
+      return;
+    }
+
+    toast({ title: "לא נמצאה תוצאה" });
+  };
+
+  useEffect(() => {
+    if (!pendingScrollId) return;
+
+    const t = setTimeout(() => {
+      const el = document.getElementById(pendingScrollId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setPendingScrollId(null);
+    }, 60);
+
+    return () => clearTimeout(t);
+  }, [pendingScrollId, tab, deptView, techView, deptTab, departments, techs, statuses]);
+
+
+
   return (
     <MainLayout>
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold">ניהול</h1>
+        <div className="flex flex-col md:flex-row gap-2">
+          <Input
+            value={globalSearch}
+            onChange={(e) => setGlobalSearch(e.target.value)}
+            placeholder="חיפוש מהיר: מחלקה / טכנאי / סטטוס… (Enter)"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") navigateSearch(globalSearch);
+            }}
+          />
+          <Button onClick={() => navigateSearch(globalSearch)}>חפש</Button>
+        </div>
 
         <Tabs className="flex justify-end" value={tab} onValueChange={(v) => setTab(v as AdminTab)}>
           <TabsList>
@@ -179,7 +346,7 @@ export default function Admin() {
                       } catch (e: any) {
                         toast({
                           title: "נכשל",
-                          description: e?.response?.data?.message ?? e?.message,
+                                description: translateBackendError(e),
                           variant: "destructive",
                         });
                       }
@@ -196,6 +363,13 @@ export default function Admin() {
                 </CardHeader>
 
                 <CardContent className="space-y-3">
+                  <Input
+                    placeholder="חיפוש מחלקה..."
+                    value={deptSearch}
+                    onChange={(e) => setDeptSearch(e.target.value)}
+                  />
+
+
                   <div className="flex gap-2">
                     <Button
                       variant={deptTab === "hospital" ? "default" : "outline"}
@@ -210,14 +384,37 @@ export default function Admin() {
                       טכנאים
                     </Button>
                   </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={deptView === "active" ? "default" : "outline"}
+                      onClick={async () => {
+                        setDeptView("active");
+                      }}
+                    >
+                      פעיל
+                    </Button>
 
-                  {(departments ?? [])
-                    .filter((d) => d.type === (deptTab === "hospital" ? "HOSPITAL" : "TECH"))
-                    .map((d) => (
-                      <div key={d.id} className="flex items-center gap-2 border rounded-md p-2">
+                    <Button
+                      variant={deptView === "archived" ? "default" : "outline"}
+                      onClick={async () => {
+                        setDeptView("archived");
+                      }}
+                    >
+                      לא פעיל
+                    </Button>
+                  </div>
+
+
+                  {deptQuery && departmentsToRender.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
+                  ) : (
+                    departmentsToRender.map((d) => (
+                      <div id={`dept-${d.id}`} key={d.id} className="flex items-center gap-2 border rounded-md p-2">
                         <div className="flex-1">
                           <div className="font-medium">{d.name}</div>
                           <div className="text-xs opacity-70">{d.type}</div>
+                          <span className={isDeptActive(d) ? "text-green-500" : "text-red-500"}>{isDeptActive(d) ? "פעיל" : "לא פעיל"}</span>
+
                         </div>
 
                         <Button
@@ -231,7 +428,7 @@ export default function Admin() {
                             } catch (e: any) {
                               toast({
                                 title: "נכשל",
-                                description: e?.response?.data?.message ?? e?.message,
+                                description: translateBackendError(e),
                                 variant: "destructive",
                               });
                             }
@@ -240,26 +437,31 @@ export default function Admin() {
                           Rename
                         </Button>
 
-                        <Button
-                          variant="destructive"
-                          onClick={async () => {
-                            if (!confirm("Delete department?")) return;
-                            try {
-                              await deleteDepartment(d.id);
+                        {deptActiveFlag ? (
+                          <Button
+                            variant="destructive"
+                            onClick={async () => {
+                              if (!confirm("Disable department?")) return;
+                              await disableDepartment(d.id);
                               await refreshDepartments();
-                            } catch (e: any) {
-                              toast({
-                                title: "נכשל",
-                                description: e?.response?.data?.message ?? e?.message,
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                        >
-                          Delete
-                        </Button>
+                            }}
+                          >
+                            השבת
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={async () => {
+                              await enableDepartment(d.id);
+                              await refreshDepartments();
+                            }}
+                          >
+                            הפעל
+                          </Button>
+                        )}
+
+
                       </div>
-                    ))}
+                    )))}
                 </CardContent>
               </Card>
             </div>
@@ -375,7 +577,7 @@ export default function Admin() {
                           title: "נכשל",
                           description: niceDetails
                             ? translateBackendError(niceDetails)
-                            : translateBackendError(String(raw)),
+                            : translateBackendError(e),
                           variant: "destructive",
                         });
                       }
@@ -385,7 +587,7 @@ export default function Admin() {
                     הוסף טכנאי
                   </Button>
                   {!canCreateTech && (
-                    <div className="text-xs text-muted-foreground text-center">
+                    <div className="flex text-xs text-muted-foreground text-center">
                       יש למלא שם, שם משתמש, סיסמה ולבחור מחלקה
                     </div>
                   )}
@@ -396,12 +598,39 @@ export default function Admin() {
               {/* LIST TECHS */}
               <Card>
                 <CardHeader><CardTitle>רשימת טכנאים</CardTitle></CardHeader>
+
+
                 <CardContent className="space-y-2">
-                  {techs.map((t) => {
+                  <Input
+                    placeholder="חיפוש טכנאי (שם / שם משתמש / מחלקה)..."
+                    value={techSearch}
+                    onChange={(e) => setTechSearch(e.target.value)}
+                  />
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant={techView === "active" ? "default" : "outline"}
+                      onClick={() => setTechView("active")}
+                    >
+                      פעיל
+                    </Button>
+
+                    <Button
+                      variant={techView === "archived" ? "default" : "outline"}
+                      onClick={() => setTechView("archived")}
+                    >
+                      לא פעיל
+                    </Button>
+                  </div>
+
+
+                  {techQuery && techsToRender.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
+                  ) : (techsToRender.map((t) => {
                     const dirty = Boolean(permDirty[t.id]);
 
                     return (
-                      <div key={t.id} className="border rounded-md p-3 space-y-3">
+                      <div id={`tech-${t.id}`} key={t.id} className="border rounded-md p-3 space-y-3">
                         <div className="flex flex-col md:flex-row md:items-start gap-3">
                           {/* details */}
                           <div className="flex-1">
@@ -411,6 +640,9 @@ export default function Admin() {
                             <div className="text-xs opacity-70">
                               מחלקה: {t.techDepartment?.name ?? t.techDepartmentId ?? "-"}
                             </div>
+                            <span className={isTechActive(t) ? "text-green-500" : "text-red-500"}>
+                              {isTechActive(t) ? "פעיל" : "לא פעיל"}
+                            </span>
                           </div>
 
                           {/* actions */}
@@ -428,7 +660,7 @@ export default function Admin() {
                                 } catch (e: any) {
                                   toast({
                                     title: "נכשל",
-                                    description: e?.response?.data?.message ?? e?.message,
+                                description: translateBackendError(e),
                                     variant: "destructive",
                                   });
                                 }
@@ -438,25 +670,32 @@ export default function Admin() {
                             </Button>
 
                             {/* delete / save / cancel in one column */}
-                            <Button
-                              variant="destructive"
-                              className="w-full"
-                              onClick={async () => {
-                                if (!confirm("Delete technician?")) return;
-                                try {
-                                  await deleteTechnician(t.id);
+                            {techActiveFlag ? (
+                              <Button
+                                variant="destructive"
+                                className="w-full"
+                                onClick={async () => {
+                                  if (!confirm("Disable technician?")) return;
+                                  await disableTechnician(t.id);
                                   await refreshTechs();
-                                } catch (e: any) {
-                                  toast({
-                                    title: "לא ניתן למחוק טכנאי",
-                                    description: e?.message,
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
-                            >
-                              מחק
-                            </Button>
+                                }}
+                              >
+                                השבת
+                              </Button>
+                            ) : (
+                              <Button
+                                className="w-full"
+                                onClick={async () => {
+                                  await enableTechnician(t.id);
+                                  await refreshTechs();
+                                }}
+                              >
+                                הפעל
+                              </Button>
+                            )}
+
+
+
                             {/* </div> */}
 
                             {/* <div className="flex grid md:grid-row-4 gap-2 "> */}
@@ -471,7 +710,7 @@ export default function Admin() {
                                 } catch (e: any) {
                                   toast({
                                     title: "נכשל",
-                                    description: e?.response?.data?.message ?? e?.message,
+                                description: translateBackendError(e),
                                     variant: "destructive",
                                   });
                                 }
@@ -521,7 +760,7 @@ export default function Admin() {
                         </div>
                       </div>
                     );
-                  })}
+                  }))}
                 </CardContent>
               </Card>
             </div>
@@ -597,7 +836,7 @@ export default function Admin() {
                       } catch (e: any) {
                         toast({
                           title: "נכשל",
-                          description: e?.response?.data?.message ?? e?.message,
+                                description: translateBackendError(e),
                           variant: "destructive",
                         });
                       }
@@ -611,12 +850,20 @@ export default function Admin() {
               <Card>
                 <CardHeader><CardTitle>כל סטטוסי הקריאות</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  {statuses.map((s) => {
+                  <Input
+                    placeholder="חיפוש סטטוס (Key / שם בעברית)..."
+                    value={statusSearch}
+                    onChange={(e) => setStatusSearch(e.target.value)}
+                  />
+
+                  {statusQuery && statusesToRender.length === 0 ? (
+  <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
+) : (statusesToRender.map((s) => {
                     const d = statusDraft[s.id] ?? s;
                     const dirty = Boolean(statusDirty[s.id]);
 
                     return (
-                      <div key={s.id} className="border rounded-md p-3 space-y-3">
+                      <div id={`status-${s.id}`} key={s.id} className="border rounded-md p-3 space-y-3">
 
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
 
@@ -721,7 +968,8 @@ export default function Admin() {
                               } catch (e: any) {
                                 toast({
                                   title: "נכשל",
-                                  description: e?.response?.data?.message ?? e?.message, variant: "destructive",
+                                description: translateBackendError(e),
+                                  variant: "destructive",
                                 });
                               }
                             }} > שמור </Button>
@@ -735,14 +983,9 @@ export default function Admin() {
                                 await deleteAdminTicketStatus(s.id);
                                 await refreshStatuses();
                               } catch (e: any) {
-                                const raw =
-                                  e?.response?.data?.error ??
-                                  e?.response?.data?.message ??
-                                  e?.message ??
-                                  "פעולה נכשלה";
                                 toast({
                                   title: "נכשל",
-                                  description: translateBackendError(String(raw)),
+                                  description: translateBackendError(e),
                                   variant: "destructive",
                                 });
                               }
@@ -752,7 +995,7 @@ export default function Admin() {
                         </div>
                       </div>
                     );
-                  })}
+                  }))}
                 </CardContent>
               </Card>
             </div>

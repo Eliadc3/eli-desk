@@ -19,10 +19,20 @@ export function errorHandler(err: any, _req: any, res: any, _next: any) {
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
-      return res.status(409).json({
-        error: "Unique constraint failed",
-        details: err.meta ?? null,
-      });
+  const meta: any = err.meta ?? {};
+  const target = Array.isArray(meta.target) ? meta.target : meta.target ? [meta.target] : [];
+
+  return res.status(409).json({
+    error: "Unique constraint failed",
+    code: "P2002",
+    message: `Unique constraint failed on the fields: ${target.join(", ")}`,
+    details: {
+      ...meta,
+      target,
+    },
+  });
+
+
     }
 
     if (err.code === "P2003") {

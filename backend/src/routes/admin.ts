@@ -185,67 +185,183 @@ adminRouter.delete(
    Departments
    ========================= */
 
-adminRouter.get("/departments", requirePermission(Permission.DEPT_MANAGE), async (_req, res, next) => {
+adminRouter.get("/departments", requirePermission(Permission.DEPT_MANAGE), async (req, res, next) => {
   try {
-    const items = await prisma.department.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] });
+    const active = String(req.query.active ?? "true").toLowerCase() !== "false"; // ✅ default: true
+
+    const items = await prisma.department.findMany({
+      where: { isActive: active },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+    });
+
     res.json({ items });
   } catch (e) { next(e); }
 });
 
-adminRouter.post("/departments", requirePermission(Permission.DEPT_MANAGE), async (req, res, next) => {
-  try {
-    const body = departmentCreateSchema.parse(req.body);
-    const created = await prisma.department.create({ data: body });
-    res.status(201).json(created);
-  } catch (e) { next(e); }
-});
 
-adminRouter.patch("/departments/:id", requirePermission(Permission.DEPT_MANAGE), async (req, res, next) => {
+
+adminRouter.post(
+  "/departments",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const body = departmentCreateSchema.parse(req.body);
+      const created = await prisma.department.create({ data: body });
+      res.status(201).json(created);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.patch(
+  "/departments/:id",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      const body = departmentPatchSchema.parse(req.body);
+      const updated = await prisma.department.update({ where: { id }, data: body });
+      res.json(updated);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.get(
+  "/departments/:id/usage",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+
+      const dept = await prisma.department.findUnique({
+        where: { id },
+        select: { id: true, type: true },
+      });
+      if (!dept) throw new HttpError(404, "Department not found");
+
+      const usedTickets =
+        dept.type === "HOSPITAL"
+          ? await prisma.ticket.count({ where: { hospitalDepartmentId: id } })
+          : 0;
+
+      const usedUsers =
+        dept.type === "TECH"
+          ? await prisma.user.count({ where: { techDepartmentId: id } })
+          : 0;
+
+      return res.json({ type: dept.type, usedTickets, usedUsers });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+
+/**
+ * ✅ חדש: העברת קריאות של מחלקה למחלקה אחרת (רק לקריאות)
+ * - שים לב: זה להעברת hospitalDepartmentId בלבד.
+ */
+adminRouter.post(
+  "/departments/:id/reassign-tickets",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const fromId = req.params.id;
+      const { toDepartmentId } = req.body ?? {};
+      if (!toDepartmentId) throw new HttpError(400, "Missing toDepartmentId");
+      if (fromId === toDepartmentId) throw new HttpError(400, "Cannot reassign to same department");
+
+      const moved = await prisma.ticket.updateMany({
+        where: { hospitalDepartmentId: fromId },
+        data: { hospitalDepartmentId: toDepartmentId },
+      });
+
+      res.json({ ok: true, moved: moved.count });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.delete(
+  "/departments/:id",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+
+      const existing = await prisma.department.findUnique({
+        where: { id },
+        select: { id: true, isActive: true },
+      });
+      if (!existing) throw new HttpError(404, "Department not found");
+
+      // ✅ אחידות: תמיד Disable, בלי מחיקה קשיחה בכלל
+      const updated = await prisma.department.update({
+        where: { id },
+        data: { isActive: false },
+        select: { id: true, name: true, type: true, isActive: true },
+      });
+
+      return res.json({ ok: true, item: updated });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+
+adminRouter.patch("/departments/:id/active", requirePermission(Permission.DEPT_MANAGE), async (req, res, next) => {
   try {
     const id = req.params.id;
-    const body = departmentPatchSchema.parse(req.body);
-    const updated = await prisma.department.update({ where: { id }, data: body });
+    const { isActive } = req.body ?? {};
+    if (typeof isActive !== "boolean") throw new HttpError(400, "Missing isActive boolean");
+
+    const updated = await prisma.department.update({ where: { id }, data: { isActive } });
     res.json(updated);
   } catch (e) { next(e); }
 });
 
-adminRouter.delete("/departments/:id", requirePermission(Permission.DEPT_MANAGE), async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const usedTickets = await prisma.ticket.count({ where: { hospitalDepartmentId: id } });
-    const usedUsers = await prisma.user.count({ where: { techDepartmentId: id } });
-    if (usedTickets > 0 || usedUsers > 0) throw new HttpError(400, "Department is in use");
-    await prisma.department.delete({ where: { id } });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
 
+/* =========================
+   Assignees
+   ========================= */
 
-// Assignees
-adminRouter.get("/assignees", requirePermission(Permission.TICKET_REASSIGN), async (_req, res, next) => {
-  try {
-    const items = await prisma.user.findMany({
-      where: { role: Role.TECHNICIAN },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    });
+adminRouter.get(
+  "/assignees",
+  requirePermission(Permission.TICKET_REASSIGN),
+  async (_req, res, next) => {
+    try {
+      const items = await prisma.user.findMany({
+        where: { role: Role.TECHNICIAN },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      });
 
-    res.json({ items });
-  } catch (e) {
-    next(e);
+      res.json({ items });
+    } catch (e) {
+      next(e);
+    }
   }
-});
+);
 
+/* =========================
+   Technicians
+   ========================= */
 
-
-// Technicians
-adminRouter.get("/technicians", requirePermission(Permission.TECH_MANAGE), async (_req, res, next) => {
+adminRouter.get("/technicians", requirePermission(Permission.TECH_MANAGE), async (req, res, next) => {
   try {
+    const active = String(req.query.active ?? "true").toLowerCase() !== "false"; // ✅ default: true
+
     const items = await prisma.user.findMany({
-      where: { role: Role.TECHNICIAN },
+      where: { role: Role.TECHNICIAN, isActive: active },
       orderBy: { name: "asc" },
       include: { techDepartment: true, permissions: true },
     });
+
     res.json({ items });
   } catch (e) { next(e); }
 });
@@ -258,7 +374,6 @@ adminRouter.post(
       const body = technicianCreateSchema.parse(req.body);
       const passwordHash = await bcrypt.hash(body.password, 10);
 
-      // 1) Create user + handle duplicate username (P2002)
       let created: { id: string; username: string; name: string; role: Role; techDepartmentId: string | null };
 
       try {
@@ -282,7 +397,7 @@ adminRouter.post(
         throw e;
       }
 
-      // 2) Permissions
+      // Permissions
       if (body.permissions?.length) {
         const uniquePerms = Array.from(new Set(body.permissions));
 
@@ -291,12 +406,8 @@ adminRouter.post(
             data: uniquePerms.map((p) => ({ userId: created.id, perm: p as any })),
           });
         } catch (e: any) {
-          // Fallback: if unique constraint still happens for any reason
           if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-            // אפשר גם להתעלם לגמרי; פה נחזיר הודעה ידידותית
-            return res.status(409).json({
-              error: "Permission already assigned",
-            });
+            return res.status(409).json({ error: "Permission already assigned" });
           }
           throw e;
         }
@@ -310,125 +421,220 @@ adminRouter.post(
   }
 );
 
+adminRouter.patch(
+  "/technicians/:id",
+  requirePermission(Permission.TECH_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      const body = technicianPatchSchema.parse(req.body);
 
-adminRouter.patch("/technicians/:id", requirePermission(Permission.TECH_MANAGE), async (req, res, next) => {
+      const data: any = {};
+      if (body.username) data.username = body.username;
+      if (body.name) data.name = body.name;
+      if (body.techDepartmentId !== undefined) data.techDepartmentId = body.techDepartmentId;
+      if (body.password) data.passwordHash = await bcrypt.hash(body.password, 10);
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data,
+        select: { id: true, username: true, name: true, role: true, techDepartmentId: true },
+      });
+
+      if (body.permissions) {
+        await prisma.userPermission.deleteMany({ where: { userId: id } });
+        if (body.permissions.length) {
+          await prisma.userPermission.createMany({
+            data: body.permissions.map((p: string) => ({ userId: id, perm: p as any })),
+          });
+        }
+      }
+
+      res.json(updated);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.get(
+  "/technicians/:id/usage",
+  requirePermission(Permission.TECH_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+
+      const assignedTickets = await prisma.ticket.count({ where: { assigneeId: id } });
+      const resolvedTickets = await prisma.ticket.count({ where: { resolvedById: id } });
+
+      return res.json({ assignedTickets, resolvedTickets });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+
+/**
+ * ✅ חדש: העברת כל הקריאות של טכנאי לטכנאי אחר (assigneeId)
+ */
+adminRouter.post(
+  "/technicians/:id/reassign-tickets",
+  requirePermission(Permission.TECH_MANAGE),
+  async (req, res, next) => {
+    try {
+      const fromId = req.params.id;
+      const { toTechnicianId } = req.body ?? {};
+      if (!toTechnicianId) throw new HttpError(400, "Missing toTechnicianId");
+      if (fromId === toTechnicianId) throw new HttpError(400, "Cannot reassign to same technician");
+
+      const moved = await prisma.ticket.updateMany({
+        where: { assigneeId: fromId },
+        data: { assigneeId: toTechnicianId },
+      });
+
+      res.json({ ok: true, moved: moved.count });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.delete(
+  "/technicians/:id",
+  requirePermission(Permission.TECH_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user) throw new HttpError(404, "User not found");
+      if (user.role !== Role.TECHNICIAN) throw new HttpError(400, "Only technicians can be disabled here");
+
+      // לא בודקים assigned tickets — משביתים גם אם יש היסטוריה
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { isActive: false },
+        select: { id: true, username: true, name: true, role: true, techDepartmentId: true, isActive: true },
+      });
+
+      res.json({ ok: true, item: updated });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.patch("/technicians/:id/active", requirePermission(Permission.TECH_MANAGE), async (req, res, next) => {
   try {
     const id = req.params.id;
-    const body = technicianPatchSchema.parse(req.body);
-
-    const data: any = {};
-    if (body.username) data.username = body.username;
-    if (body.name) data.name = body.name;
-    if (body.techDepartmentId !== undefined) data.techDepartmentId = body.techDepartmentId;
-    if (body.password) data.passwordHash = await bcrypt.hash(body.password, 10);
-
+    const { isActive } = req.body ?? {};
+    if (typeof isActive !== "boolean") throw new HttpError(400, "Missing isActive boolean");
 
     const updated = await prisma.user.update({
       where: { id },
-      data,
-      select: { id: true, username: true, name: true, role: true, techDepartmentId: true },
+      data: { isActive },
+      select: { id: true, username: true, name: true, role: true, techDepartmentId: true, isActive: true },
     });
-
-    if (body.permissions) {
-      await prisma.userPermission.deleteMany({ where: { userId: id } });
-      if (body.permissions.length) {
-        await prisma.userPermission.createMany({
-          data: body.permissions.map((p: string) => ({ userId: id, perm: p as any })),
-        });
-      }
-    }
 
     res.json(updated);
   } catch (e) { next(e); }
 });
 
-adminRouter.delete("/technicians/:id", requirePermission(Permission.TECH_MANAGE), async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const user = await prisma.user.findUnique({ where: { id } });
-    if (!user) throw new HttpError(404, "User not found");
-    if (user.role !== Role.TECHNICIAN) throw new HttpError(400, "Only technicians can be deleted here");
 
-    const assigned = await prisma.ticket.count({ where: { assigneeId: id } });
-    if (assigned > 0) throw new HttpError(400, "Technician has assigned tickets; reassign first");
 
-    await prisma.userPermission.deleteMany({ where: { userId: id } });
-    await prisma.user.delete({ where: { id } });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
+/* =========================
+   Ticket power actions
+   ========================= */
 
-// Ticket power actions
-adminRouter.post("/tickets/:id/reassign", requirePermission(Permission.TICKET_REASSIGN), async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const { assigneeId } = req.body ?? {};
-    if (!assigneeId) throw new HttpError(400, "Missing assigneeId");
+adminRouter.post(
+  "/tickets/:id/reassign",
+  requirePermission(Permission.TICKET_REASSIGN),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      const { assigneeId } = req.body ?? {};
+      if (!assigneeId) throw new HttpError(400, "Missing assigneeId");
 
-    const t = await prisma.ticket.update({ where: { id }, data: { assigneeId } });
+      const t = await prisma.ticket.update({ where: { id }, data: { assigneeId } });
 
-    await prisma.ticketActivity.create({
-      data: {
-        ticketId: id,
-        actorId: (req as any).user.sub,
-        type: "reassign",
-        message: "Ticket reassigned",
-        metaJson: JSON.stringify({ assigneeId }),
-      },
-    });
+      await prisma.ticketActivity.create({
+        data: {
+          ticketId: id,
+          actorId: (req as any).user.sub,
+          type: "reassign",
+          message: "Ticket reassigned",
+          metaJson: JSON.stringify({ assigneeId }),
+        },
+      });
 
-    res.json(t);
-  } catch (e) { next(e); }
-});
+      res.json(t);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
 
-adminRouter.post("/tickets/:id/duplicate", requirePermission(Permission.TICKET_DUPLICATE), async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const orig = await prisma.ticket.findUnique({ where: { id } });
-    if (!orig) throw new HttpError(404, "Ticket not found");
+adminRouter.post(
+  "/tickets/:id/duplicate",
+  requirePermission(Permission.TICKET_DUPLICATE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      const orig = await prisma.ticket.findUnique({ where: { id } });
+      if (!orig) throw new HttpError(404, "Ticket not found");
 
-    const c = await prisma.counter.upsert({
-      where: { key: "ticketNumber" },
-      update: { value: { increment: 1 } },
-      create: { key: "ticketNumber", value: 1000 },
-    });
+      const c = await prisma.counter.upsert({
+        where: { key: "ticketNumber" },
+        update: { value: { increment: 1 } },
+        create: { key: "ticketNumber", value: 1000 },
+      });
 
-    const copy = await prisma.ticket.create({
-      data: {
-        number: c.value,
-        subject: `[COPY] ${orig.subject}`,
-        description: orig.description,
-        statusId: orig.statusId,
-        priority: orig.priority,
-        orgId: orig.orgId,
-        requesterId: orig.requesterId,
-        assigneeId: orig.assigneeId,
-        source: orig.source,
-        externalRequesterName: orig.externalRequesterName,
-        externalRequesterPhone: orig.externalRequesterPhone,
-        hospitalDepartmentId: orig.hospitalDepartmentId,
-      },
-    });
+      const copy = await prisma.ticket.create({
+        data: {
+          number: c.value,
+          subject: `[COPY] ${orig.subject}`,
+          description: orig.description,
+          statusId: orig.statusId,
+          priority: orig.priority,
+          orgId: orig.orgId,
+          requesterId: orig.requesterId,
+          assigneeId: orig.assigneeId,
+          source: orig.source,
+          externalRequesterName: orig.externalRequesterName,
+          externalRequesterPhone: orig.externalRequesterPhone,
+          hospitalDepartmentId: orig.hospitalDepartmentId,
+        },
+      });
 
-    await prisma.ticketActivity.create({
-      data: {
-        ticketId: copy.id,
-        actorId: (req as any).user.sub,
-        type: "duplicate",
-        message: `Duplicated from #${orig.number}`,
-        metaJson: JSON.stringify({ from: orig.id }),
-      },
-    });
+      await prisma.ticketActivity.create({
+        data: {
+          ticketId: copy.id,
+          actorId: (req as any).user.sub,
+          type: "duplicate",
+          message: `Duplicated from #${orig.number}`,
+          metaJson: JSON.stringify({ from: orig.id }),
+        },
+      });
 
-    res.status(201).json(copy);
-  } catch (e) { next(e); }
-});
+      res.status(201).json(copy);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
 
-adminRouter.delete("/tickets/:id", requirePermission(Permission.TICKET_DELETE), async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    await prisma.ticketActivity.deleteMany({ where: { ticketId: id } });
-    await prisma.ticket.delete({ where: { id } });
-    res.json({ ok: true });
-  } catch (e) { next(e); }
-});
+adminRouter.delete(
+  "/tickets/:id",
+  requirePermission(Permission.TICKET_DELETE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+      await prisma.ticketActivity.deleteMany({ where: { ticketId: id } });
+      await prisma.ticket.delete({ where: { id } });
+      res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  }
+);

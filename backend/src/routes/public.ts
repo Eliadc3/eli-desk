@@ -72,7 +72,7 @@ publicRouter.post("/tickets", async (req, res) => {
 
     if (!hospitalDepartmentId || !subject || !description || !req.body?.name || !req.body?.phone) {
       return res.status(400).json({
-        message: "hospital Department, subject, description, name, phone are required",
+        message: "All fields are required",
       });
     }
 
@@ -81,14 +81,12 @@ publicRouter.post("/tickets", async (req, res) => {
     const externalRequesterName = normalizeStr(req.body?.name ?? req.body?.externalRequesterName);
     const externalRequesterPhone = normalizeStr(req.body?.phone ?? req.body?.externalRequesterPhone);
 
-    // טכנאי רנדומלי (אם יש)
     const techs = await prisma.user.findMany({
       where: { orgId, role: { in: ["TECHNICIAN", "ADMIN"] } },
       select: { id: true },
     });
     const assigneeId = techs.length ? techs[Math.floor(Math.random() * techs.length)].id : null;
 
-    // ✅ חובה: סטטוס דיפולט (לפי orgId)
     const statusId = await getDefaultStatusId(orgId);
 
     const number = await nextTicketNumber();
@@ -105,8 +103,6 @@ publicRouter.post("/tickets", async (req, res) => {
         externalRequesterName,
         externalRequesterPhone,
         hospitalDepartmentId,
-
-        // ✅ זה מה שחסר לך:
         statusId,
       },
       select: {
