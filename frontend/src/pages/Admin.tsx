@@ -346,7 +346,7 @@ export default function Admin() {
                       } catch (e: any) {
                         toast({
                           title: "נכשל",
-                                description: translateBackendError(e),
+                          description: translateBackendError(e),
                           variant: "destructive",
                         });
                       }
@@ -660,7 +660,7 @@ export default function Admin() {
                                 } catch (e: any) {
                                   toast({
                                     title: "נכשל",
-                                description: translateBackendError(e),
+                                    description: translateBackendError(e),
                                     variant: "destructive",
                                   });
                                 }
@@ -710,7 +710,7 @@ export default function Admin() {
                                 } catch (e: any) {
                                   toast({
                                     title: "נכשל",
-                                description: translateBackendError(e),
+                                    description: translateBackendError(e),
                                     variant: "destructive",
                                   });
                                 }
@@ -836,7 +836,7 @@ export default function Admin() {
                       } catch (e: any) {
                         toast({
                           title: "נכשל",
-                                description: translateBackendError(e),
+                          description: translateBackendError(e),
                           variant: "destructive",
                         });
                       }
@@ -857,8 +857,8 @@ export default function Admin() {
                   />
 
                   {statusQuery && statusesToRender.length === 0 ? (
-  <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
-) : (statusesToRender.map((s) => {
+                    <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
+                  ) : (statusesToRender.map((s) => {
                     const d = statusDraft[s.id] ?? s;
                     const dirty = Boolean(statusDirty[s.id]);
 
@@ -968,7 +968,7 @@ export default function Admin() {
                               } catch (e: any) {
                                 toast({
                                   title: "נכשל",
-                                description: translateBackendError(e),
+                                  description: translateBackendError(e),
                                   variant: "destructive",
                                 });
                               }
