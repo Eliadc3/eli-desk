@@ -149,7 +149,9 @@ export default function Admin() {
 
     const td = await listTechDepartments();
     setTechDepts((td ?? []).map((x: any) => ({ id: x.id, name: x.name })));
+    console.log("TECH DEPTS API:", td);
   };
+
 
 
   const refreshStatuses = async () => {
@@ -183,6 +185,12 @@ export default function Admin() {
     if (tab === "technicians") refreshTechs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techView]);
+
+  useEffect(() => {
+  if (tab === "technicians") {
+    refreshTechs(); // בפנים חייב להביא גם tech departments
+  }
+}, [tab]);
 
 
   // ===== Search helpers =====
@@ -444,6 +452,7 @@ export default function Admin() {
                               if (!confirm("Disable department?")) return;
                               await disableDepartment(d.id);
                               await refreshDepartments();
+                              await refreshTechs();
                             }}
                           >
                             השבת
@@ -453,6 +462,7 @@ export default function Admin() {
                             onClick={async () => {
                               await enableDepartment(d.id);
                               await refreshDepartments();
+                              await refreshTechs(); // כי ייתכן וטכנאים במחלקה הזו לא פעילים
                             }}
                           >
                             הפעל
@@ -678,6 +688,7 @@ export default function Admin() {
                                   if (!confirm("Disable technician?")) return;
                                   await disableTechnician(t.id);
                                   await refreshTechs();
+                                  await refreshDepartments();
                                 }}
                               >
                                 השבת
@@ -688,6 +699,7 @@ export default function Admin() {
                                 onClick={async () => {
                                   await enableTechnician(t.id);
                                   await refreshTechs();
+                                  await refreshDepartments(); // כי ייתכן והמחלקה שלו לא פעילה
                                 }}
                               >
                                 הפעל

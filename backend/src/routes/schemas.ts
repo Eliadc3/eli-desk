@@ -94,6 +94,7 @@ export const technicianPatchSchema = z.object({
       ])
     )
     .optional(),
+    isActive: z.boolean().optional(),
 });
 
 // Departments (Admin)
@@ -104,6 +105,7 @@ export const departmentCreateSchema = z.object({
 
 export const departmentPatchSchema = z.object({
   name: z.string().min(2).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export const ticketStatusCreateSchema = z.object({

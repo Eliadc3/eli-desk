@@ -14,7 +14,7 @@ export async function createDepartment(payload: { name: string; type: Department
   return data as Department;
 }
 
-export async function patchDepartment(id: string, payload: { name?: string }) {
+export async function patchDepartment(id: string, payload: { name?: string; isActive?: boolean }) {
   const { data } = await api.patch(`/admin/departments/${id}`, payload);
   return data as Department;
 }
@@ -25,7 +25,7 @@ export async function disableDepartment(id: string) {
 }
 
 export async function enableDepartment(id: string) {
-  const res = await api.post(`/admin/departments/${id}/enable`);
+  const res = await api.patch(`/admin/departments/${id}`, { isActive: true });
   return res.data;
 }
 
@@ -108,7 +108,7 @@ export async function createTechnician(payload: {
 
 export async function patchTechnician(
   id: string,
-  payload: { name?: string; password?: string; techDepartmentId?: string | null; permissions?: Permission[] }
+  payload: { name?: string; password?: string; techDepartmentId?: string | null; permissions?: Permission[]; isActive?: boolean }
 ) {
   const { data } = await api.patch(`/admin/technicians/${id}`, payload);
   return data;
@@ -120,8 +120,7 @@ export async function disableTechnician(id: string) {
 }
 
 export async function enableTechnician(id: string) {
-  const res = await api.post(`/admin/technicians/${id}/enable`);
-  return res.data;
+  return api.patch(`/admin/technicians/${id}`, { isActive: true });
 }
 
 export async function reassignTicket(id: string, assigneeId: string) {
