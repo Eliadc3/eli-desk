@@ -72,10 +72,16 @@ export async function patchAdminTicketStatus(
   return data as TicketStatusAdminDto;
 }
 
-export async function deleteAdminTicketStatus(id: string) {
-  const { data } = await api.delete(`/admin/ticket-statuses/${id}`);
-  return data as { ok: boolean };
+export async function disableAdminTicketStatus(id: string) {
+  const { data } = await api.patch(`/admin/ticket-statuses/${id}`, { isActive: false });
+  return data as TicketStatusAdminDto;
 }
+
+export async function enableAdminTicketStatus(id: string) {
+  const { data } = await api.patch(`/admin/ticket-statuses/${id}`, { isActive: true });
+  return data as TicketStatusAdminDto;
+}
+
 
 
 
