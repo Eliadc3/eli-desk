@@ -19,8 +19,7 @@ import {
   listAdminTicketStatuses,
   createAdminTicketStatus,
   patchAdminTicketStatus,
-  disableAdminTicketStatus,
-  enableAdminTicketStatus,
+  deleteAdminTicketStatus,
   enableDepartment,
   enableTechnician,
 } from "@/api/admin";
@@ -71,12 +70,9 @@ export default function Admin() {
     permissions: [],
   });
   const [techView, setTechView] = useState<ActiveView>("active");
-  const [statusView, setStatusView] = useState<ActiveView>("active");
 
   const deptActiveFlag = deptView === "active";  // ✅ פעיל => true
   const techActiveFlag = techView === "active";  // ✅ פעיל => true
-  const statusActiveFlag = statusView === "active";
-
 
   // Search
   const [deptSearch, setDeptSearch] = useState("");
@@ -98,7 +94,6 @@ export default function Admin() {
     String(newTech.techDepartmentId ?? "").trim().length > 0;
 
 
-
   const [permDraft, setPermDraft] = useState<Record<string, Permission[]>>({});
   const [permDirty, setPermDirty] = useState<Record<string, boolean>>({});
 
@@ -115,15 +110,6 @@ export default function Admin() {
     isActive: true,
     isDefault: false,
   });
-
-  const canCreateStatus =
-    String(newStatus.key ?? "").trim().length > 0 &&
-    String(newStatus.labelHe ?? "").trim().length > 0 &&
-    String(newStatus.color ?? "").trim().length > 0 &&
-    !isNaN(Number(newStatus.sortOrder)) && Number(newStatus.sortOrder) >= 0;
-
-
-
 
   const refreshDepartments = async () => {
     if (!canDept) return;
@@ -201,10 +187,10 @@ export default function Admin() {
   }, [techView]);
 
   useEffect(() => {
-    if (tab === "technicians") {
-      refreshTechs(); // בפנים חייב להביא גם tech departments
-    }
-  }, [tab]);
+  if (tab === "technicians") {
+    refreshTechs(); // בפנים חייב להביא גם tech departments
+  }
+}, [tab]);
 
 
   // ===== Search helpers =====
@@ -234,18 +220,13 @@ export default function Admin() {
   });
 
   const statusQuery = statusSearch.trim().toLowerCase();
-  const statusesToRender = (statuses ?? [])
-    .filter((s) => {
-      const d = statusDraft[s.id] ?? s;
-      return statusActiveFlag ? Boolean(d.isActive) : !Boolean(d.isActive);
-    })
-    .filter((s) => {
-      if (!statusQuery) return true;
-      const d = statusDraft[s.id] ?? s;
-      const key = String(d?.key ?? "").toLowerCase();
-      const labelHe = String(d?.labelHe ?? "").toLowerCase();
-      return key.includes(statusQuery) || labelHe.includes(statusQuery);
-    });
+  const statusesToRender = (statuses ?? []).filter((s) => {
+    if (!statusQuery) return true;
+    const d = statusDraft[s.id] ?? s;
+    const key = String(d?.key ?? "").toLowerCase();
+    const labelHe = String(d?.labelHe ?? "").toLowerCase();
+    return key.includes(statusQuery) || labelHe.includes(statusQuery);
+  });
 
   // Global search that navigates to the correct tab + active/inactive view and scrolls to the item
   const navigateSearch = async (raw: string) => {
@@ -806,64 +787,48 @@ export default function Admin() {
             <div className="grid gap-4">
               <Card>
                 <CardHeader><CardTitle>צור סטטוס קריאה</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-[1fr_2fr_2fr_1fr_auto] gap-3">
-                  
-                  <div className="flex flex-col gap-1">
-  <label className="text-xs text-muted-foreground">ID</label>
-  <Input
-    type="number"
-    placeholder="ID"
-    value={String(newStatus.sortOrder ?? 0)}
-    onChange={(e) => setNewStatus({ ...newStatus, sortOrder: Number(e.target.value) })}
-  />
-</div>
+                <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                  <Input
+                    placeholder="מפתח (KEY)"
+                    value={newStatus.key}
+                    onChange={(e) => setNewStatus({ ...newStatus, key: e.target.value.toUpperCase() })}
+                  />
+                  <Input
+                    placeholder="שם בעברית"
+                    value={newStatus.labelHe}
+                    onChange={(e) => setNewStatus({ ...newStatus, labelHe: e.target.value })}
+                  />
+                  <Input
+                    type="color"
+                    value={newStatus.color || "#3B82F6"}
+                    onChange={(e) => setNewStatus({ ...newStatus, color: e.target.value })}
+                    className="h-10 p-1"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="ID"
+                    value={String(newStatus.sortOrder ?? 0)}
+                    onChange={(e) => setNewStatus({ ...newStatus, sortOrder: Number(e.target.value) })}
+                  />
 
-                  <div className="flex flex-col gap-1">
-  <label className="text-xs text-muted-foreground">מפתח (KEY)</label>
-  <Input
-    placeholder="מפתח (KEY)"
-    value={newStatus.key}
-    onChange={(e) => setNewStatus({ ...newStatus, key: e.target.value.toUpperCase() })}
-  />
-</div>
+                  <label className="flex items-center gap-2 text-sm border rounded-md px-3">
+                    <Checkbox
+                      checked={Boolean(newStatus.isActive)}
+                      onCheckedChange={(v) => setNewStatus({ ...newStatus, isActive: Boolean(v) })}
+                    />
+                    פעיל
+                  </label>
 
-                  <div className="flex flex-col gap-1">
-  <label className="text-xs text-muted-foreground">שם בעברית</label>
-  <Input
-    placeholder="שם בעברית"
-    value={newStatus.labelHe}
-    onChange={(e) => setNewStatus({ ...newStatus, labelHe: e.target.value })}
-  />
-</div>
-
-                 <div className="flex flex-col gap-1">
-  <label className="text-xs text-muted-foreground">צבע</label>
-  <Input
-    type="color"
-    value={newStatus.color || "#3B82F6"}
-    onChange={(e) => setNewStatus({ ...newStatus, color: e.target.value })}
-    className="h-10 p-1"
-  />
-</div>
-
-                 <div className="flex flex-col gap-1 w-fit">
-  <label className="text-xs text-muted-foreground">ברירת מחדל</label>
-
-  <div className="h-10 flex items-center">
-    <label className="flex items-center gap-2 text-sm">
-      <Checkbox
-        checked={Boolean(newStatus.isDefault)}
-        onCheckedChange={(v) => setNewStatus({ ...newStatus, isDefault: Boolean(v) })}
-      />
-      כן
-    </label>
-  </div>
-</div>
-
+                  <label className="flex items-center gap-2 text-sm border rounded-md px-3">
+                    <Checkbox
+                      checked={Boolean(newStatus.isDefault)}
+                      onCheckedChange={(v) => setNewStatus({ ...newStatus, isDefault: Boolean(v) })}
+                    />
+                    ברירת מחדל
+                  </label>
 
                   <Button
-                    className={`md:col-span-6 ${!canCreateStatus ? "bg-blue-300 cursor-not-allowed" : ""}`}
-                    disabled={!canCreateStatus}
+                    className="md:col-span-6"
                     onClick={async () => {
                       try {
                         if (!String(newStatus.key ?? "").trim() || !String(newStatus.labelHe ?? "").trim()) return;
@@ -873,7 +838,7 @@ export default function Admin() {
                           labelHe: String(newStatus.labelHe).trim(),
                           color: String(newStatus.color ?? "").trim() ? String(newStatus.color).trim() : null,
                           sortOrder: Number(newStatus.sortOrder) || 0,
-                          isActive: true,
+                          isActive: Boolean(newStatus.isActive),
                           isDefault: Boolean(newStatus.isDefault),
                         });
 
@@ -891,12 +856,6 @@ export default function Admin() {
                   >
                     הוסף סטטוס
                   </Button>
-                  {!canCreateStatus && (
-                    <div className="flex text-xs text-muted-foreground text-center">
-                      יש למלא Key, שם סטטוס, צבע ו-ID
-                    </div>
-                  )}
-
                 </CardContent>
               </Card>
 
@@ -908,21 +867,6 @@ export default function Admin() {
                     value={statusSearch}
                     onChange={(e) => setStatusSearch(e.target.value)}
                   />
-                  <div className="flex gap-2">
-                    <Button
-                      variant={statusView === "active" ? "default" : "outline"}
-                      onClick={() => setStatusView("active")}
-                    >
-                      פעיל
-                    </Button>
-
-                    <Button
-                      variant={statusView === "archived" ? "default" : "outline"}
-                      onClick={() => setStatusView("archived")}
-                    >
-                      לא פעיל
-                    </Button>
-                  </div>
 
                   {statusQuery && statusesToRender.length === 0 ? (
                     <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
@@ -933,7 +877,7 @@ export default function Admin() {
                     return (
                       <div id={`status-${s.id}`} key={s.id} className="border rounded-md p-3 space-y-3">
 
-                        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_0.5fr_0.5fr_0.5fr_auto] gap-4 items-end">
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
 
                           {/* KEY */}
                           <div className="flex flex-col gap-1">
@@ -990,10 +934,25 @@ export default function Admin() {
                             />
                           </div>
 
+                          {/* פעיל */}
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs text-muted-foreground">פעיל</label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={Boolean(d.isActive)}
+                                onCheckedChange={(v) => {
+                                  const next = { ...d, isActive: Boolean(v) };
+                                  setStatusDraft((p) => ({ ...p, [s.id]: next }));
+                                  setStatusDirty((p) => ({ ...p, [s.id]: true }));
+                                }}
+                              />
+                              כן
+                            </label>
+                          </div>
+
                           {/* ברירת מחדל */}
                           <div className="flex flex-col gap-1">
                             <label className="text-xs text-muted-foreground">ברירת מחדל</label>
-                            <div className="h-10 flex items-center">
                             <label className="flex items-center gap-2 text-sm">
                               <Checkbox
                                 checked={Boolean(d.isDefault)}
@@ -1005,7 +964,6 @@ export default function Admin() {
                               />
                               כן
                             </label>
-                            </div>
                           </div>
                           <div className="flex justify-end gap-2">
                             <Button disabled={!dirty} onClick={async () => {
@@ -1014,6 +972,7 @@ export default function Admin() {
                                   key: String(d.key ?? "").trim().toUpperCase(),
                                   labelHe: String(d.labelHe ?? "").trim(),
                                   color: String(d.color ?? "").trim() ? String(d.color).trim() : null, sortOrder: Number(d.sortOrder) || 0,
+                                  isActive: Boolean(d.isActive),
                                   isDefault: Boolean(d.isDefault),
                                 });
                                 await refreshStatuses();
@@ -1030,38 +989,20 @@ export default function Admin() {
                               setStatusDraft((p) => ({ ...p, [s.id]: { ...s } }));
                               setStatusDirty((p) => ({ ...p, [s.id]: false }));
                             }} > ביטול </Button>
-                            {Boolean(d.isActive) ? (
-                              <Button
-                                variant="destructive"
-                                disabled={Boolean(d.isDefault)}
-                                title={d.isDefault ? "לא ניתן להשבית סטטוס ברירת מחדל" : undefined}
-                                onClick={async () => {
-                                  if (!confirm("Disable status?")) return;
-                                  try {
-                                    await disableAdminTicketStatus(s.id);
-                                    await refreshStatuses();
-                                  } catch (e: any) {
-                                    toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
-                                  }
-                                }}
-                              >
-                                השבת
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={async () => {
-                                  try {
-                                    await enableAdminTicketStatus(s.id);
-                                    await refreshStatuses();
-                                  } catch (e: any) {
-                                    toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
-                                  }
-                                }}
-                              >
-                                הפעל
-                              </Button>
-                            )}
-
+                            <Button variant="destructive" onClick={async () => {
+                              if (!confirm("Delete status?")) return;
+                              try {
+                                await deleteAdminTicketStatus(s.id);
+                                await refreshStatuses();
+                              } catch (e: any) {
+                                toast({
+                                  title: "נכשל",
+                                  description: translateBackendError(e),
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                            > מחק </Button>
                           </div>
                         </div>
                       </div>
