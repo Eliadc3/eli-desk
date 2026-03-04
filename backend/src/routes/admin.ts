@@ -374,7 +374,7 @@ adminRouter.post(
       const body = technicianCreateSchema.parse(req.body);
       const passwordHash = await bcrypt.hash(body.password, 10);
 
-      let created: { id: string; username: string; name: string; role: Role; techDepartmentId: string | null };
+      let created: { id: string; username: string; name: string; role: Role; techDepartmentId: string | null; isActive: boolean };
 
       try {
         created = await prisma.user.create({
@@ -385,7 +385,7 @@ adminRouter.post(
             role: Role.TECHNICIAN,
             techDepartmentId: body.techDepartmentId,
           },
-          select: { id: true, username: true, name: true, role: true, techDepartmentId: true },
+          select: { id: true, username: true, name: true, role: true, techDepartmentId: true, isActive: true },
         });
       } catch (e: any) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -434,11 +434,12 @@ adminRouter.patch(
       if (body.name) data.name = body.name;
       if (body.techDepartmentId !== undefined) data.techDepartmentId = body.techDepartmentId;
       if (body.password) data.passwordHash = await bcrypt.hash(body.password, 10);
+      if (body.isActive !== undefined) data.isActive = body.isActive;
 
       const updated = await prisma.user.update({
         where: { id },
         data,
-        select: { id: true, username: true, name: true, role: true, techDepartmentId: true },
+        select: { id: true, username: true, name: true, role: true, techDepartmentId: true, isActive: true },
       });
 
       if (body.permissions) {

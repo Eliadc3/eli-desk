@@ -126,7 +126,8 @@ export async function disableTechnician(id: string) {
 }
 
 export async function enableTechnician(id: string) {
-  return api.patch(`/admin/technicians/${id}`, { isActive: true });
+  const res = await api.patch(`/admin/technicians/${id}/active`, { isActive: true });
+  return res.data;
 }
 
 export async function reassignTicket(id: string, assigneeId: string) {

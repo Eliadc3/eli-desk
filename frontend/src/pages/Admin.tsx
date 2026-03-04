@@ -19,7 +19,8 @@ import {
   listAdminTicketStatuses,
   createAdminTicketStatus,
   patchAdminTicketStatus,
-  deleteAdminTicketStatus,
+  disableAdminTicketStatus,
+  enableAdminTicketStatus,
   enableDepartment,
   enableTechnician,
 } from "@/api/admin";
@@ -27,25 +28,42 @@ import type { Permission } from "@/api/auth";
 import { listTechDepartments } from "@/api/departments";
 import { translateBackendError } from "@/utils/backendErrorTranslator";
 
-
-const PERMS: { key: Permission; label: string }[] = [
-  { key: "TICKET_DELETE", label: "מחיקת קריאות" },
-  { key: "TICKET_DUPLICATE", label: "שכפול קריאות" },
-  { key: "TICKET_REASSIGN", label: "החלפת מטפלים" },
-  { key: "TECH_MANAGE", label: "ניהול טכנאים" },
-  { key: "DEPT_MANAGE", label: "ניהול מחלקות" },
+const PERM_GROUPS: { title: string; items: { key: Permission; label: string }[] }[] = [
+  {
+    title: "הרשאות ניהול",
+    items: [
+      { key: "TECH_MANAGE", label: "ניהול טכנאים" },
+      { key: "DEPT_MANAGE", label: "ניהול מחלקות" },
+    ],
+  },
+  {
+    title: "הרשאות קריאות",
+    items: [
+      { key: "TICKET_DELETE", label: "מחיקת קריאות" },
+      { key: "TICKET_DUPLICATE", label: "שכפול קריאות" },
+      { key: "TICKET_REASSIGN", label: "שיוך קריאה לטכנאי אחר" },
+    ],
+  },
 ];
 
 type AdminTab = "departments" | "technicians" | "ticket-statuses";
 type DeptSubTab = "hospital" | "tech";
 type ActiveView = "active" | "archived";
 
+const byNameABC = (a: any, b: any) =>
+  String(a?.name ?? "").localeCompare(String(b?.name ?? ""), ["he", "en"], { sensitivity: "base" });
+
+const byUserABC = (a: any, b: any) => {
+  const nameCmp = String(a?.name ?? "").localeCompare(String(b?.name ?? ""), ["he", "en"], { sensitivity: "base" });
+  if (nameCmp !== 0) return nameCmp;
+  return String(a?.username ?? "").localeCompare(String(b?.username ?? ""), ["he", "en"], { sensitivity: "base" });
+};
+
 export default function Admin() {
   const { me } = useAuth();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
-
 
   const canTech = hasAnyPermission(me, ["TECH_MANAGE"]);
   const canDept = hasAnyPermission(me, ["DEPT_MANAGE"]);
@@ -69,10 +87,15 @@ export default function Admin() {
     techDepartmentId: "",
     permissions: [],
   });
-  const [techView, setTechView] = useState<ActiveView>("active");
+  const [techDeptDraft, setTechDeptDraft] = useState<Record<string, string>>({});
+  const [techDeptDirty, setTechDeptDirty] = useState<Record<string, boolean>>({});
 
-  const deptActiveFlag = deptView === "active";  // ✅ פעיל => true
-  const techActiveFlag = techView === "active";  // ✅ פעיל => true
+  const [techView, setTechView] = useState<ActiveView>("active");
+  const [statusView, setStatusView] = useState<ActiveView>("active");
+
+  const deptActiveFlag = deptView === "active"; // ✅ פעיל => true
+  const techActiveFlag = techView === "active"; // ✅ פעיל => true
+  const statusActiveFlag = statusView === "active";
 
   // Search
   const [deptSearch, setDeptSearch] = useState("");
@@ -81,7 +104,6 @@ export default function Admin() {
   // Search + navigation
   const [globalSearch, setGlobalSearch] = useState("");
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
-
 
   // For "active/inactive" lookup while searching
   const [departmentsAll, setDepartmentsAll] = useState<any[]>([]);
@@ -92,7 +114,6 @@ export default function Admin() {
     String(newTech.username ?? "").trim().length >= 2 &&
     String(newTech.password ?? "").length >= 6 &&
     String(newTech.techDepartmentId ?? "").trim().length > 0;
-
 
   const [permDraft, setPermDraft] = useState<Record<string, Permission[]>>({});
   const [permDirty, setPermDirty] = useState<Record<string, boolean>>({});
@@ -111,49 +132,76 @@ export default function Admin() {
     isDefault: false,
   });
 
+  const canCreateStatus =
+    String(newStatus.key ?? "").trim().length > 0 &&
+    String(newStatus.labelHe ?? "").trim().length > 0 &&
+    String(newStatus.color ?? "").trim().length > 0 &&
+    !isNaN(Number(newStatus.sortOrder)) &&
+    Number(newStatus.sortOrder) >= 0;
+
   const refreshDepartments = async () => {
     if (!canDept) return;
     const d = await listDepartments({ active: deptActiveFlag });
-    setDepartments((d ?? []).map((x: any) => ({ ...x, __active: deptActiveFlag })));
+    setDepartments(
+      (d ?? [])
+        .map((x: any) => ({ ...x, __active: deptActiveFlag }))
+        .sort(byNameABC)
+    );
+
     const [activeList, inactiveList] = await Promise.all([
       listDepartments({ active: true }),
       listDepartments({ active: false }),
     ]);
 
-    setDepartmentsAll([
-      ...((activeList ?? []).map((x: any) => ({ ...x, __active: true })) as any[]),
-      ...((inactiveList ?? []).map((x: any) => ({ ...x, __active: false })) as any[]),
-    ]);
+    setDepartmentsAll(
+      [
+        ...((activeList ?? []).map((x: any) => ({ ...x, __active: true })) as any[]),
+        ...((inactiveList ?? []).map((x: any) => ({ ...x, __active: false })) as any[]),
+      ].sort(byNameABC)
+    );
   };
 
-  const refreshTechs = async () => {
+  const refreshTechs = async (active?: boolean) => {
     if (!canTech) return;
 
-    const list = await listTechnicians({ active: techActiveFlag }); // ✅ לא deptActiveFlag
-    setTechs((list ?? []).map((x: any) => ({ ...x, __active: techActiveFlag })));
+    const activeFlag = typeof active === "boolean" ? active : techActiveFlag;
+
+    const list = await listTechnicians({ active: activeFlag });
+    setTechs(
+      (list ?? [])
+        .map((x: any) => ({ ...x, __active: activeFlag }))
+        .sort(byUserABC)
+    );
+
     const [activeList, inactiveList] = await Promise.all([
       listTechnicians({ active: true }),
       listTechnicians({ active: false }),
     ]);
 
-    setTechsAll([
-      ...((activeList ?? []).map((x: any) => ({ ...x, __active: true })) as any[]),
-      ...((inactiveList ?? []).map((x: any) => ({ ...x, __active: false })) as any[]),
-    ]);
-
+    setTechsAll(
+      [
+        ...((activeList ?? []).map((x: any) => ({ ...x, __active: true })) as any[]),
+        ...((inactiveList ?? []).map((x: any) => ({ ...x, __active: false })) as any[]),
+      ].sort(byUserABC)
+    );
 
     const init: Record<string, Permission[]> = {};
     for (const t of list ?? []) init[t.id] = (t.permissions ?? []).map((x: any) => x.perm);
     setPermDraft(init);
     setPermDirty({});
 
+    const deptInit: Record<string, string> = {};
+    for (const t of list ?? []) deptInit[t.id] = t.techDepartmentId ?? "";
+    setTechDeptDraft(deptInit);
+    setTechDeptDirty({});
+
     const td = await listTechDepartments();
-    setTechDepts((td ?? []).map((x: any) => ({ id: x.id, name: x.name })));
-    console.log("TECH DEPTS API:", td);
+    setTechDepts(
+      (td ?? [])
+        .map((x: any) => ({ id: x.id, name: x.name }))
+        .sort(byNameABC)
+    );
   };
-
-
-
   const refreshStatuses = async () => {
     if (!canStatuses) return;
     const st = await listAdminTicketStatuses();
@@ -186,12 +234,6 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techView]);
 
-  useEffect(() => {
-  if (tab === "technicians") {
-    refreshTechs(); // בפנים חייב להביא גם tech departments
-  }
-}, [tab]);
-
 
   // ===== Search helpers =====
   const isDeptActive = (d: any) => {
@@ -200,7 +242,12 @@ export default function Admin() {
   };
 
   const isTechActive = (t: any) => {
+    // קודם כל האמת מהשרת
+    if (typeof t?.isActive === "boolean") return t.isActive;
+
+    // fallback לרשימות עם __active
     if (typeof t?.__active === "boolean") return t.__active;
+
     return true;
   };
 
@@ -220,13 +267,18 @@ export default function Admin() {
   });
 
   const statusQuery = statusSearch.trim().toLowerCase();
-  const statusesToRender = (statuses ?? []).filter((s) => {
-    if (!statusQuery) return true;
-    const d = statusDraft[s.id] ?? s;
-    const key = String(d?.key ?? "").toLowerCase();
-    const labelHe = String(d?.labelHe ?? "").toLowerCase();
-    return key.includes(statusQuery) || labelHe.includes(statusQuery);
-  });
+  const statusesToRender = (statuses ?? [])
+    .filter((s) => {
+      const d = statusDraft[s.id] ?? s;
+      return statusActiveFlag ? Boolean(d.isActive) : !Boolean(d.isActive);
+    })
+    .filter((s) => {
+      if (!statusQuery) return true;
+      const d = statusDraft[s.id] ?? s;
+      const key = String(d?.key ?? "").toLowerCase();
+      const labelHe = String(d?.labelHe ?? "").toLowerCase();
+      return key.includes(statusQuery) || labelHe.includes(statusQuery);
+    });
 
   // Global search that navigates to the correct tab + active/inactive view and scrolls to the item
   const navigateSearch = async (raw: string) => {
@@ -294,8 +346,6 @@ export default function Admin() {
     return () => clearTimeout(t);
   }, [pendingScrollId, tab, deptView, techView, deptTab, departments, techs, statuses]);
 
-
-
   return (
     <MainLayout>
       <div className="space-y-4">
@@ -314,20 +364,30 @@ export default function Admin() {
 
         <Tabs className="flex justify-end" value={tab} onValueChange={(v) => setTab(v as AdminTab)}>
           <TabsList>
-            <TabsTrigger value="ticket-statuses" disabled={!canStatuses}>סטטוסי קריאות</TabsTrigger>
-            <TabsTrigger value="technicians" disabled={!canTech}>טכנאים</TabsTrigger>
-            <TabsTrigger value="departments" disabled={!canDept}>מחלקות</TabsTrigger>
+            <TabsTrigger value="ticket-statuses" disabled={!canStatuses}>
+              סטטוסי קריאות
+            </TabsTrigger>
+            <TabsTrigger value="technicians" disabled={!canTech}>
+              טכנאים
+            </TabsTrigger>
+            <TabsTrigger value="departments" disabled={!canDept}>
+              מחלקות
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
         {/* ================= DEPARTMENTS ================= */}
-        {tab === "departments" && (
-          !canDept ? (
-            <Card><CardContent className="p-6">אין הרשאות לניהול מחלקות</CardContent></Card>
+        {tab === "departments" &&
+          (!canDept ? (
+            <Card>
+              <CardContent className="p-6">אין הרשאות לניהול מחלקות</CardContent>
+            </Card>
           ) : (
             <div className="grid gap-4">
               <Card>
-                <CardHeader><CardTitle>צור מחלקה</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>צור מחלקה</CardTitle>
+                </CardHeader>
                 <CardContent className="flex flex-col md:flex-row gap-3">
                   <Input
                     placeholder="שם מחלקה"
@@ -377,7 +437,6 @@ export default function Admin() {
                     onChange={(e) => setDeptSearch(e.target.value)}
                   />
 
-
                   <div className="flex gap-2">
                     <Button
                       variant={deptTab === "hospital" ? "default" : "outline"}
@@ -392,37 +451,38 @@ export default function Admin() {
                       טכנאים
                     </Button>
                   </div>
+
                   <div className="flex gap-2">
                     <Button
                       variant={deptView === "active" ? "default" : "outline"}
-                      onClick={async () => {
-                        setDeptView("active");
-                      }}
+                      onClick={async () => setDeptView("active")}
                     >
                       פעיל
                     </Button>
 
                     <Button
                       variant={deptView === "archived" ? "default" : "outline"}
-                      onClick={async () => {
-                        setDeptView("archived");
-                      }}
+                      onClick={async () => setDeptView("archived")}
                     >
                       לא פעיל
                     </Button>
                   </div>
 
-
                   {deptQuery && departmentsToRender.length === 0 ? (
                     <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
                   ) : (
                     departmentsToRender.map((d) => (
-                      <div id={`dept-${d.id}`} key={d.id} className="flex items-center gap-2 border rounded-md p-2">
+                      <div
+                        id={`dept-${d.id}`}
+                        key={d.id}
+                        className="flex items-center gap-2 border rounded-md p-2"
+                      >
                         <div className="flex-1">
                           <div className="font-medium">{d.name}</div>
                           <div className="text-xs opacity-70">{d.type}</div>
-                          <span className={isDeptActive(d) ? "text-green-500" : "text-red-500"}>{isDeptActive(d) ? "פעיל" : "לא פעיל"}</span>
-
+                          <span className={isDeptActive(d) ? "text-green-500" : "text-red-500"}>
+                            {isDeptActive(d) ? "פעיל" : "לא פעיל"}
+                          </span>
                         </div>
 
                         <Button
@@ -462,30 +522,33 @@ export default function Admin() {
                             onClick={async () => {
                               await enableDepartment(d.id);
                               await refreshDepartments();
-                              await refreshTechs(); // כי ייתכן וטכנאים במחלקה הזו לא פעילים
+                              await refreshTechs();
                             }}
                           >
                             הפעל
                           </Button>
                         )}
-
-
                       </div>
-                    )))}
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </div>
-          )
-        )}
+          ))}
+
         {/* ================= TECHNICIANS ================= */}
-        {tab === "technicians" && (
-          !canTech ? (
-            <Card><CardContent className="p-6">אין הרשאות לניהול טכנאים</CardContent></Card>
+        {tab === "technicians" &&
+          (!canTech ? (
+            <Card>
+              <CardContent className="p-6">אין הרשאות לניהול טכנאים</CardContent>
+            </Card>
           ) : (
             <div className="grid gap-4">
               {/* CREATE TECH */}
               <Card>
-                <CardHeader><CardTitle>צור טכנאי</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>צור טכנאי</CardTitle>
+                </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <Input
                     placeholder="שם"
@@ -511,35 +574,43 @@ export default function Admin() {
                   >
                     <option value="">בחר מחלקה</option>
                     {techDepts.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
                     ))}
                   </select>
 
-                  <div className="md:col-span-4 border rounded-md p-3 space-y-2">
+                  <div className="md:col-span-4 border rounded-md p-3 space-y-4">
                     <div className="text-sm font-medium">הרשאות</div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      {PERMS.map((p) => {
-                        const current: Permission[] = newTech.permissions ?? [];
-                        const checked = current.includes(p.key);
+                    <div className="space-y-2 gap-2">
+                      {PERM_GROUPS.map((g) => (
+                        <div key={g.title} className="space-y-2 gap-2">
+                          <div className="text-xs text-muted-foreground">{g.title}</div>
 
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            {g.items.map((p) => {
+                              const current: Permission[] = newTech.permissions ?? [];
+                              const checked = current.includes(p.key);
 
+                              return (
+                                <label key={p.key} className="flex items-center gap-2 text-sm">
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(v) => {
+                                      const next = v
+                                        ? Array.from(new Set([...current, p.key]))
+                                        : current.filter((x) => x !== p.key);
 
-                        return (
-                          <label key={p.key} className="flex items-center gap-2 text-sm">
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(v) => {
-                                const next = v
-                                  ? Array.from(new Set([...current, p.key]))
-                                  : current.filter((x) => x !== p.key);
-
-                                setNewTech({ ...newTech, permissions: next });
-                              }}
-                            />
-                            {p.label}
-                          </label>
-                        );
-                      })}
+                                      setNewTech({ ...newTech, permissions: next });
+                                    }}
+                                  />
+                                  {p.label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -563,54 +634,56 @@ export default function Admin() {
                           name: String(newTech.name ?? "").trim(),
                           username: String(newTech.username ?? "").trim(),
                           password: String(newTech.password ?? ""),
-                          techDepartmentId, // ✅ כבר בדקת שהוא לא ריק
+                          techDepartmentId,
                           permissions: newTech.permissions ?? [],
                         });
 
-                        setNewTech({ name: "", username: "", password: "", techDepartmentId: "", permissions: [] });
+                        setNewTech({
+                          name: "",
+                          username: "",
+                          password: "",
+                          techDepartmentId: "",
+                          permissions: [],
+                        });
                         await refreshTechs();
                         toast({ title: "טכנאי נוצר בהצלחה" });
                       } catch (e: any) {
                         const data = e?.response?.data;
-                        const raw = data?.error ?? data?.message ?? e?.message ?? "פעולה נכשלה";
 
                         const fieldErrors = data?.details?.fieldErrors;
-                        const niceDetails =
-                          fieldErrors
-                            ? Object.entries(fieldErrors)
-                              .filter(([, arr]) => Array.isArray(arr) && arr.length)
-                              .map(([k, arr]) => `${k}: ${(arr as string[])[0]}`)
-                              .join(" | ")
-                            : null;
+                        const niceDetails = fieldErrors
+                          ? Object.entries(fieldErrors)
+                            .filter(([, arr]) => Array.isArray(arr) && arr.length)
+                            .map(([k, arr]) => `${k}: ${(arr as string[])[0]}`)
+                            .join(" | ")
+                          : null;
 
                         toast({
                           title: "נכשל",
-                          description: niceDetails
-                            ? translateBackendError(niceDetails)
-                            : translateBackendError(e),
+                          description: niceDetails ? translateBackendError(niceDetails) : translateBackendError(e),
                           variant: "destructive",
                         });
                       }
                     }}
-
                   >
                     הוסף טכנאי
                   </Button>
+
                   {!canCreateTech && (
                     <div className="flex text-xs text-muted-foreground text-center">
                       יש למלא שם, שם משתמש, סיסמה ולבחור מחלקה
                     </div>
                   )}
-
                 </CardContent>
               </Card>
 
               {/* LIST TECHS */}
               <Card>
-                <CardHeader><CardTitle>רשימת טכנאים</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>רשימת טכנאים</CardTitle>
+                </CardHeader>
 
-
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-3">
                   <Input
                     placeholder="חיפוש טכנאי (שם / שם משתמש / מחלקה)..."
                     value={techSearch}
@@ -633,34 +706,166 @@ export default function Admin() {
                     </Button>
                   </div>
 
-
                   {techQuery && techsToRender.length === 0 ? (
                     <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
-                  ) : (techsToRender.map((t) => {
-                    const dirty = Boolean(permDirty[t.id]);
+                  ) : (
+                    techsToRender.map((t) => {
+                      const permsIsDirty = Boolean(permDirty[t.id]);
+                      const deptIsDirty = Boolean(techDeptDirty[t.id]);
+                      const anyDirty = permsIsDirty || deptIsDirty;
 
-                    return (
-                      <div id={`tech-${t.id}`} key={t.id} className="border rounded-md p-3 space-y-3">
-                        <div className="flex flex-col md:flex-row md:items-start gap-3">
-                          {/* details */}
-                          <div className="flex-1">
-                            <div className="font-medium">
-                              {t.name}
+                      const originalPerms: Permission[] = (t.permissions ?? []).map((x: any) => x.perm);
+                      const originalDeptId: string = t.techDepartmentId ?? "";
+
+                      const savePayload: any = {};
+                      if (permsIsDirty) savePayload.permissions = permDraft[t.id] ?? [];
+                      if (deptIsDirty) {
+                        const nextDept = String(techDeptDraft[t.id] ?? "").trim();
+                        savePayload.techDepartmentId = nextDept;
+                      }
+
+                      const canSave =
+                        anyDirty && (!deptIsDirty || String(techDeptDraft[t.id] ?? "").trim().length > 0);
+
+                      return (
+                        <div
+                          id={`tech-${t.id}`}
+                          key={t.id}
+                          className="border rounded-xl p-4 space-y-4 bg-background"
+                          dir="rtl"
+                        >
+                          {/* 1) פרטי משתמש */}
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="font-semibold truncate">{t.name}
+                                  <span
+                                    className={`m-2 text-xs px-2 py-1 rounded-full border ${isTechActive(t)
+                                      ? "text-green-700 bg-green-50 border-green-200"
+                                      : "text-red-700 bg-red-50 border-red-200"
+                                      }`}
+                                  >
+                                    {isTechActive(t) ? "פעיל" : "לא פעיל"}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs opacity-70 truncate">שם משתמש: {t.username ?? "-"}</div>
+                                <div className="mt-1 text-xs opacity-70 truncate">
+                                  מחלקה נוכחית: {t.techDepartment?.name ?? "-"}
+                                </div>
+
+                              </div>
                             </div>
-                            <div className="text-xs opacity-70">
-                              מחלקה: {t.techDepartment?.name ?? t.techDepartmentId ?? "-"}
+
+                            {anyDirty && (
+                              <div className="pt-2 text-[11px] text-amber-700">
+                                יש שינויים שלא נשמרו
+                                {deptIsDirty ? " (מחלקה)" : ""}
+                                {permsIsDirty ? " (הרשאות)" : ""}
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+
+                            {/* 2) שינוי מחלקה */}
+                            <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+                              <div className="text-xs text-muted-foreground">שינוי מחלקה</div>
+
+                              <select
+                                className="border rounded-md p-2 bg-background w-full"
+                                value={techDeptDraft[t.id] ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setTechDeptDraft((p) => ({ ...p, [t.id]: v }));
+                                  setTechDeptDirty((p) => ({ ...p, [t.id]: true }));
+                                }}
+                              >
+                                <option value="" disabled>
+                                  בחר מחלקה
+                                </option>
+                                {techDepts.map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.name}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <div className="text-[11px] text-muted-foreground">
+                                השינוי יישמר בלחיצה על “שמור”
+                              </div>
                             </div>
-                            <span className={isTechActive(t) ? "text-green-500" : "text-red-500"}>
-                              {isTechActive(t) ? "פעיל" : "לא פעיל"}
-                            </span>
+
+                            {/* 3) הרשאות ניהול */}
+                            <div className="rounded-xl border bg-muted/30 p-4">
+                              <div className="text-xs text-muted-foreground mb-3">הרשאות ניהול</div>
+
+                              <div className="flex flex-col gap-3 ">
+                                {PERM_GROUPS[0].items.map((p) => {
+                                  const draftPerms = permDraft[t.id] ?? [];
+                                  const checked = draftPerms.includes(p.key);
+
+                                  return (
+                                    <label
+                                      key={p.key}
+                                      className="inline-flex flex-row items-center gap-2 text-sm"
+                                      dir="rtl"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(v) => {
+                                          const next = v
+                                            ? Array.from(new Set([...draftPerms, p.key]))
+                                            : draftPerms.filter((x) => x !== p.key);
+
+                                          setPermDraft((prev) => ({ ...prev, [t.id]: next }));
+                                          setPermDirty((prev) => ({ ...prev, [t.id]: true }));
+                                        }}
+                                      />
+                                      <span className="text-right">{p.label}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* 4) הרשאות קריאות */}
+                            <div className="rounded-xl border bg-muted/30 p-4">
+                              <div className="text-xs text-muted-foreground mb-3">הרשאות קריאות</div>
+
+                              <div className="flex flex-col gap-3">
+                                {PERM_GROUPS[1].items.map((p) => {
+                                  const draftPerms = permDraft[t.id] ?? [];
+                                  const checked = draftPerms.includes(p.key);
+
+                                  return (
+                                    <label
+                                      key={p.key}
+                                      className="inline-flex flex-row items-center gap-2 text-sm"
+                                      dir="rtl"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(v) => {
+                                          const next = v
+                                            ? Array.from(new Set([...draftPerms, p.key]))
+                                            : draftPerms.filter((x) => x !== p.key);
+
+                                          setPermDraft((prev) => ({ ...prev, [t.id]: next }));
+                                          setPermDirty((prev) => ({ ...prev, [t.id]: true }));
+                                        }}
+                                      />
+                                      <span className="text-right">{p.label}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
 
-                          {/* actions */}
-                          <div className="flex flex-row gap-2 ">
-                            {/* rename */}
+                          {/* ===== ACTION BUTTONS ===== */}
+                          <div className="flex flex-wrap gap-2 border-t pt-3">
+                            {/* <div className="flex flex-wrap gap-2"> */}
                             <Button
                               variant="outline"
-                              className="w-full"
                               onClick={async () => {
                                 const name = prompt("New name", t.name);
                                 if (!name) return;
@@ -679,11 +884,9 @@ export default function Admin() {
                               שנה שם
                             </Button>
 
-                            {/* delete / save / cancel in one column */}
                             {techActiveFlag ? (
                               <Button
                                 variant="destructive"
-                                className="w-full"
                                 onClick={async () => {
                                   if (!confirm("Disable technician?")) return;
                                   await disableTechnician(t.id);
@@ -695,30 +898,49 @@ export default function Admin() {
                               </Button>
                             ) : (
                               <Button
-                                className="w-full"
                                 onClick={async () => {
-                                  await enableTechnician(t.id);
-                                  await refreshTechs();
-                                  await refreshDepartments(); // כי ייתכן והמחלקה שלו לא פעילה
+                                  try {
+                                    await enableTechnician(t.id);
+                                    setTechSearch("");
+                                    // עוברים למסך פעילים
+                                    setTechView("active");
+                                    // מרעננים בוודאות רשימת פעילים
+                                    await refreshTechs(true);
+                                    // גלילה אליו אחרי המעבר
+                                    setPendingScrollId(`tech-${t.id}`);
+                                    await refreshDepartments();
+
+                                    toast({ title: "טכנאי הופעל והועבר לרשימת הפעילים" });
+                                  } catch (e: any) {
+                                    toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
+                                  }
                                 }}
                               >
                                 הפעל
                               </Button>
                             )}
-
-
-
                             {/* </div> */}
 
-                            {/* <div className="flex grid md:grid-row-4 gap-2 "> */}
+                            {/* <div className="flex flex-wrap gap-2 justify-end"> */}
                             <Button
-                              className={`w-full text-white ${dirty ? "bg-green-600 hover:bg-green-700" : "bg-green-300 cursor-not-allowed"}`}
-                              disabled={!dirty}
+                              className={`text-white ${canSave ? "bg-green-600 hover:bg-green-700" : "bg-green-300 cursor-not-allowed"
+                                }`}
+                              disabled={!canSave}
                               onClick={async () => {
                                 try {
-                                  await patchTechnician(t.id, { permissions: permDraft[t.id] ?? [] });
+                                  // הגנה נוספת: אם מחלקה dirty אבל ריקה, לא לשלוח
+                                  if (deptIsDirty && !String(techDeptDraft[t.id] ?? "").trim()) {
+                                    toast({
+                                      title: "נכשל",
+                                      description: "חובה לבחור מחלקה",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+
+                                  await patchTechnician(t.id, savePayload);
                                   await refreshTechs();
-                                  toast({ title: "הרשאות נשמרו בהצלחה" });
+                                  toast({ title: "נשמר בהצלחה" });
                                 } catch (e: any) {
                                   toast({
                                     title: "נכשל",
@@ -733,102 +955,98 @@ export default function Admin() {
 
                             <Button
                               variant="outline"
-                              className="w-full"
-                              disabled={!dirty}
+                              disabled={!anyDirty}
                               onClick={() => {
-                                const original = (t.permissions ?? []).map((x: any) => x.perm);
-                                setPermDraft((prev) => ({ ...prev, [t.id]: original }));
+                                // rollback permissions
+                                setPermDraft((prev) => ({ ...prev, [t.id]: originalPerms }));
                                 setPermDirty((prev) => ({ ...prev, [t.id]: false }));
+
+                                // rollback dept
+                                setTechDeptDraft((prev) => ({ ...prev, [t.id]: originalDeptId }));
+                                setTechDeptDirty((prev) => ({ ...prev, [t.id]: false }));
                               }}
                             >
                               ביטול
                             </Button>
+                            {/* </div> */}
                           </div>
                         </div>
-
-                        {/* perms grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          {PERMS.map((p) => {
-                            const draftPerms = permDraft[t.id] ?? [];
-                            const checked = draftPerms.includes(p.key);
-
-                            return (
-                              <label key={p.key} className="flex items-center gap-2 text-sm">
-                                <Checkbox
-                                  checked={checked}
-                                  onCheckedChange={(v) => {
-                                    const next = v
-                                      ? Array.from(new Set([...draftPerms, p.key]))
-                                      : draftPerms.filter((x) => x !== p.key);
-
-                                    setPermDraft((prev) => ({ ...prev, [t.id]: next }));
-                                    setPermDirty((prev) => ({ ...prev, [t.id]: true }));
-                                  }}
-                                />
-                                {p.label}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  }))}
+                      );
+                    })
+                  )}
                 </CardContent>
               </Card>
             </div>
-          )
-        )}
+          ))}
 
         {/* ================= TICKET STATUSES ================= */}
-        {tab === "ticket-statuses" && (
-          !canStatuses ? (
-            <Card><CardContent className="p-6">אין הרשאות לניהול סטטוסים</CardContent></Card>
+        {tab === "ticket-statuses" &&
+          (!canStatuses ? (
+            <Card>
+              <CardContent className="p-6">אין הרשאות לניהול סטטוסים</CardContent>
+            </Card>
           ) : (
             <div className="grid gap-4">
               <Card>
-                <CardHeader><CardTitle>צור סטטוס קריאה</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                  <Input
-                    placeholder="מפתח (KEY)"
-                    value={newStatus.key}
-                    onChange={(e) => setNewStatus({ ...newStatus, key: e.target.value.toUpperCase() })}
-                  />
-                  <Input
-                    placeholder="שם בעברית"
-                    value={newStatus.labelHe}
-                    onChange={(e) => setNewStatus({ ...newStatus, labelHe: e.target.value })}
-                  />
-                  <Input
-                    type="color"
-                    value={newStatus.color || "#3B82F6"}
-                    onChange={(e) => setNewStatus({ ...newStatus, color: e.target.value })}
-                    className="h-10 p-1"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="ID"
-                    value={String(newStatus.sortOrder ?? 0)}
-                    onChange={(e) => setNewStatus({ ...newStatus, sortOrder: Number(e.target.value) })}
-                  />
-
-                  <label className="flex items-center gap-2 text-sm border rounded-md px-3">
-                    <Checkbox
-                      checked={Boolean(newStatus.isActive)}
-                      onCheckedChange={(v) => setNewStatus({ ...newStatus, isActive: Boolean(v) })}
+                <CardHeader>
+                  <CardTitle>צור סטטוס קריאה</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-[1fr_2fr_2fr_1fr_auto] gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">ID</label>
+                    <Input
+                      type="number"
+                      placeholder="ID"
+                      value={String(newStatus.sortOrder ?? 0)}
+                      onChange={(e) => setNewStatus({ ...newStatus, sortOrder: Number(e.target.value) })}
                     />
-                    פעיל
-                  </label>
+                  </div>
 
-                  <label className="flex items-center gap-2 text-sm border rounded-md px-3">
-                    <Checkbox
-                      checked={Boolean(newStatus.isDefault)}
-                      onCheckedChange={(v) => setNewStatus({ ...newStatus, isDefault: Boolean(v) })}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">מפתח (KEY)</label>
+                    <Input
+                      placeholder="מפתח (KEY)"
+                      value={newStatus.key}
+                      onChange={(e) => setNewStatus({ ...newStatus, key: e.target.value.toUpperCase() })}
                     />
-                    ברירת מחדל
-                  </label>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">שם בעברית</label>
+                    <Input
+                      placeholder="שם בעברית"
+                      value={newStatus.labelHe}
+                      onChange={(e) => setNewStatus({ ...newStatus, labelHe: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">צבע</label>
+                    <Input
+                      type="color"
+                      value={newStatus.color || "#3B82F6"}
+                      onChange={(e) => setNewStatus({ ...newStatus, color: e.target.value })}
+                      className="h-10 p-1"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1 w-fit">
+                    <label className="text-xs text-muted-foreground">ברירת מחדל</label>
+
+                    <div className="h-10 flex items-center">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={Boolean(newStatus.isDefault)}
+                          onCheckedChange={(v) => setNewStatus({ ...newStatus, isDefault: Boolean(v) })}
+                        />
+                        כן
+                      </label>
+                    </div>
+                  </div>
 
                   <Button
-                    className="md:col-span-6"
+                    className={`md:col-span-6 ${!canCreateStatus ? "bg-blue-300 cursor-not-allowed" : ""}`}
+                    disabled={!canCreateStatus}
                     onClick={async () => {
                       try {
                         if (!String(newStatus.key ?? "").trim() || !String(newStatus.labelHe ?? "").trim()) return;
@@ -836,13 +1054,22 @@ export default function Admin() {
                         await createAdminTicketStatus({
                           key: String(newStatus.key).trim().toUpperCase(),
                           labelHe: String(newStatus.labelHe).trim(),
-                          color: String(newStatus.color ?? "").trim() ? String(newStatus.color).trim() : null,
+                          color: String(newStatus.color ?? "").trim()
+                            ? String(newStatus.color).trim()
+                            : null,
                           sortOrder: Number(newStatus.sortOrder) || 0,
-                          isActive: Boolean(newStatus.isActive),
+                          isActive: true,
                           isDefault: Boolean(newStatus.isDefault),
                         });
 
-                        setNewStatus({ key: "", labelHe: "", color: "#3B82F6", sortOrder: 0, isActive: true, isDefault: false });
+                        setNewStatus({
+                          key: "",
+                          labelHe: "",
+                          color: "#3B82F6",
+                          sortOrder: 0,
+                          isActive: true,
+                          isDefault: false,
+                        });
                         await refreshStatuses();
                         toast({ title: "סטטוס נוצר בהצלחה" });
                       } catch (e: any) {
@@ -856,164 +1083,213 @@ export default function Admin() {
                   >
                     הוסף סטטוס
                   </Button>
+
+                  {!canCreateStatus && (
+                    <div className="flex text-xs text-muted-foreground text-center">
+                      יש למלא Key, שם סטטוס, צבע ו-ID
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>כל סטטוסי הקריאות</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>כל סטטוסי הקריאות</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-3">
                   <Input
                     placeholder="חיפוש סטטוס (Key / שם בעברית)..."
                     value={statusSearch}
                     onChange={(e) => setStatusSearch(e.target.value)}
                   />
+                  <div className="flex gap-2">
+                    <Button
+                      variant={statusView === "active" ? "default" : "outline"}
+                      onClick={() => setStatusView("active")}
+                    >
+                      פעיל
+                    </Button>
+
+                    <Button
+                      variant={statusView === "archived" ? "default" : "outline"}
+                      onClick={() => setStatusView("archived")}
+                    >
+                      לא פעיל
+                    </Button>
+                  </div>
 
                   {statusQuery && statusesToRender.length === 0 ? (
                     <div className="text-sm text-muted-foreground">לא נמצאו תוצאות</div>
-                  ) : (statusesToRender.map((s) => {
-                    const d = statusDraft[s.id] ?? s;
-                    const dirty = Boolean(statusDirty[s.id]);
+                  ) : (
+                    statusesToRender.map((s) => {
+                      const d = statusDraft[s.id] ?? s;
+                      const dirty = Boolean(statusDirty[s.id]);
 
-                    return (
-                      <div id={`status-${s.id}`} key={s.id} className="border rounded-md p-3 space-y-3">
-
-                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-
-                          {/* KEY */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground">Key</label>
-                            <Input
-                              value={String(d.key ?? "")}
-                              onChange={(e) => {
-                                const next = { ...d, key: e.target.value.toUpperCase() };
-                                setStatusDraft((p) => ({ ...p, [s.id]: next }));
-                                setStatusDirty((p) => ({ ...p, [s.id]: true }));
-                              }}
-                            />
-                          </div>
-
-                          {/* שם בעברית */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground">שם סטטוס</label>
-                            <Input
-                              value={String(d.labelHe ?? "")}
-                              onChange={(e) => {
-                                const next = { ...d, labelHe: e.target.value };
-                                setStatusDraft((p) => ({ ...p, [s.id]: next }));
-                                setStatusDirty((p) => ({ ...p, [s.id]: true }));
-                              }}
-                            />
-                          </div>
-
-                          {/* צבע */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground">צבע</label>
-                            <Input
-                              type="color"
-                              value={String(d.color ?? "#6B7280")}
-                              onChange={(e) => {
-                                const next = { ...d, color: e.target.value };
-                                setStatusDraft((p) => ({ ...p, [s.id]: next }));
-                                setStatusDirty((p) => ({ ...p, [s.id]: true }));
-                              }}
-                              className="h-10 p-1"
-                            />
-                          </div>
-
-                          {/* סדר */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground">ID</label>
-                            <Input
-                              type="number"
-                              value={String(d.sortOrder ?? 0)}
-                              onChange={(e) => {
-                                const next = { ...d, sortOrder: Number(e.target.value) };
-                                setStatusDraft((p) => ({ ...p, [s.id]: next }));
-                                setStatusDirty((p) => ({ ...p, [s.id]: true }));
-                              }}
-                            />
-                          </div>
-
-                          {/* פעיל */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground">פעיל</label>
-                            <label className="flex items-center gap-2 text-sm">
-                              <Checkbox
-                                checked={Boolean(d.isActive)}
-                                onCheckedChange={(v) => {
-                                  const next = { ...d, isActive: Boolean(v) };
+                      return (
+                        <div id={`status-${s.id}`} key={s.id} className="border rounded-md p-3 space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_0.5fr_0.5fr_0.5fr_auto] gap-4 items-end">
+                            {/* KEY */}
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs text-muted-foreground">Key</label>
+                              <Input
+                                value={String(d.key ?? "")}
+                                onChange={(e) => {
+                                  const next = { ...d, key: e.target.value.toUpperCase() };
                                   setStatusDraft((p) => ({ ...p, [s.id]: next }));
                                   setStatusDirty((p) => ({ ...p, [s.id]: true }));
                                 }}
                               />
-                              כן
-                            </label>
-                          </div>
+                            </div>
 
-                          {/* ברירת מחדל */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground">ברירת מחדל</label>
-                            <label className="flex items-center gap-2 text-sm">
-                              <Checkbox
-                                checked={Boolean(d.isDefault)}
-                                onCheckedChange={(v) => {
-                                  const next = { ...d, isDefault: Boolean(v) };
+                            {/* שם בעברית */}
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs text-muted-foreground">שם סטטוס</label>
+                              <Input
+                                value={String(d.labelHe ?? "")}
+                                onChange={(e) => {
+                                  const next = { ...d, labelHe: e.target.value };
                                   setStatusDraft((p) => ({ ...p, [s.id]: next }));
                                   setStatusDirty((p) => ({ ...p, [s.id]: true }));
                                 }}
                               />
-                              כן
-                            </label>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button disabled={!dirty} onClick={async () => {
-                              try {
-                                await patchAdminTicketStatus(s.id, {
-                                  key: String(d.key ?? "").trim().toUpperCase(),
-                                  labelHe: String(d.labelHe ?? "").trim(),
-                                  color: String(d.color ?? "").trim() ? String(d.color).trim() : null, sortOrder: Number(d.sortOrder) || 0,
-                                  isActive: Boolean(d.isActive),
-                                  isDefault: Boolean(d.isDefault),
-                                });
-                                await refreshStatuses();
-                                toast({ title: "נשמר בהצלחה" });
-                              } catch (e: any) {
-                                toast({
-                                  title: "נכשל",
-                                  description: translateBackendError(e),
-                                  variant: "destructive",
-                                });
-                              }
-                            }} > שמור </Button>
-                            <Button variant="outline" disabled={!dirty} onClick={() => {
-                              setStatusDraft((p) => ({ ...p, [s.id]: { ...s } }));
-                              setStatusDirty((p) => ({ ...p, [s.id]: false }));
-                            }} > ביטול </Button>
-                            <Button variant="destructive" onClick={async () => {
-                              if (!confirm("Delete status?")) return;
-                              try {
-                                await deleteAdminTicketStatus(s.id);
-                                await refreshStatuses();
-                              } catch (e: any) {
-                                toast({
-                                  title: "נכשל",
-                                  description: translateBackendError(e),
-                                  variant: "destructive",
-                                });
-                              }
-                            }}
-                            > מחק </Button>
+                            </div>
+
+                            {/* צבע */}
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs text-muted-foreground">צבע</label>
+                              <Input
+                                type="color"
+                                value={String(d.color ?? "#6B7280")}
+                                onChange={(e) => {
+                                  const next = { ...d, color: e.target.value };
+                                  setStatusDraft((p) => ({ ...p, [s.id]: next }));
+                                  setStatusDirty((p) => ({ ...p, [s.id]: true }));
+                                }}
+                                className="h-10 p-1"
+                              />
+                            </div>
+
+                            {/* סדר */}
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs text-muted-foreground">ID</label>
+                              <Input
+                                type="number"
+                                value={String(d.sortOrder ?? 0)}
+                                onChange={(e) => {
+                                  const next = { ...d, sortOrder: Number(e.target.value) };
+                                  setStatusDraft((p) => ({ ...p, [s.id]: next }));
+                                  setStatusDirty((p) => ({ ...p, [s.id]: true }));
+                                }}
+                              />
+                            </div>
+
+                            {/* ברירת מחדל */}
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs text-muted-foreground">ברירת מחדל</label>
+                              <div className="h-10 flex items-center">
+                                <label className="flex items-center gap-2 text-sm">
+                                  <Checkbox
+                                    checked={Boolean(d.isDefault)}
+                                    onCheckedChange={(v) => {
+                                      const next = { ...d, isDefault: Boolean(v) };
+                                      setStatusDraft((p) => ({ ...p, [s.id]: next }));
+                                      setStatusDirty((p) => ({ ...p, [s.id]: true }));
+                                    }}
+                                  />
+                                  כן
+                                </label>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                disabled={!dirty}
+                                onClick={async () => {
+                                  try {
+                                    await patchAdminTicketStatus(s.id, {
+                                      key: String(d.key ?? "").trim().toUpperCase(),
+                                      labelHe: String(d.labelHe ?? "").trim(),
+                                      color: String(d.color ?? "").trim()
+                                        ? String(d.color).trim()
+                                        : null,
+                                      sortOrder: Number(d.sortOrder) || 0,
+                                      isDefault: Boolean(d.isDefault),
+                                    });
+                                    await refreshStatuses();
+                                    toast({ title: "נשמר בהצלחה" });
+                                  } catch (e: any) {
+                                    toast({
+                                      title: "נכשל",
+                                      description: translateBackendError(e),
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                              >
+                                שמור
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                disabled={!dirty}
+                                onClick={() => {
+                                  setStatusDraft((p) => ({ ...p, [s.id]: { ...s } }));
+                                  setStatusDirty((p) => ({ ...p, [s.id]: false }));
+                                }}
+                              >
+                                ביטול
+                              </Button>
+
+                              {Boolean(d.isActive) ? (
+                                <Button
+                                  variant="destructive"
+                                  disabled={Boolean(d.isDefault)}
+                                  title={d.isDefault ? "לא ניתן להשבית סטטוס ברירת מחדל" : undefined}
+                                  onClick={async () => {
+                                    if (!confirm("Disable status?")) return;
+                                    try {
+                                      await disableAdminTicketStatus(s.id);
+                                      await refreshStatuses();
+                                    } catch (e: any) {
+                                      toast({
+                                        title: "נכשל",
+                                        description: translateBackendError(e),
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  השבת
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={async () => {
+                                    try {
+                                      await enableAdminTicketStatus(s.id);
+                                      await refreshStatuses();
+                                    } catch (e: any) {
+                                      toast({
+                                        title: "נכשל",
+                                        description: translateBackendError(e),
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  הפעל
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  }))}
+                      );
+                    })
+                  )}
                 </CardContent>
               </Card>
             </div>
-          )
-        )}
+          ))}
       </div>
-    </MainLayout >
+    </MainLayout>
   );
 }
