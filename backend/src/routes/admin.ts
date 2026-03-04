@@ -314,6 +314,64 @@ adminRouter.delete(
 );
 
 
+adminRouter.delete(
+  "/departments/:id/permanent",
+  requirePermission(Permission.DEPT_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+
+      const dept = await prisma.department.findUnique({
+        where: { id },
+        select: { id: true, name: true, type: true, isActive: true },
+      });
+      if (!dept) throw new HttpError(404, "Department not found");
+
+      // ✅ רק אם לא פעילה
+      if (dept.isActive) throw new HttpError(400, "Cannot delete active department");
+
+      // ✅ אם זו מחלקת בית חולים — בדוק קריאות משויכות + החזר מספרים
+      if (dept.type === "HOSPITAL") {
+        const tickets = await prisma.ticket.findMany({
+          where: { hospitalDepartmentId: id },
+          select: { number: true },
+          orderBy: { number: "asc" },
+        });
+
+        if (tickets.length) {
+          return res.status(409).json({
+            error: "Department has tickets",
+            details: { ticketNumbers: tickets.map((t) => t.number) },
+          });
+        }
+      }
+
+      // ✅ אם זו מחלקת טכנאים — אל תאפשר מחיקה אם יש טכנאים משויכים
+      if (dept.type === "TECH") {
+        const users = await prisma.user.findMany({
+          where: { techDepartmentId: id },
+          select: { id: true, username: true, name: true },
+          orderBy: { name: "asc" },
+        });
+
+        if (users.length) {
+          return res.status(409).json({
+            error: "Department has technicians",
+            details: {
+              users: users.map((u) => ({ id: u.id, username: u.username, name: u.name })),
+            },
+          });
+        }
+      }
+
+      await prisma.department.delete({ where: { id } });
+      return res.json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
 adminRouter.patch("/departments/:id/active", requirePermission(Permission.DEPT_MANAGE), async (req, res, next) => {
   try {
     const id = req.params.id;
@@ -336,7 +394,7 @@ adminRouter.get(
   async (_req, res, next) => {
     try {
       const items = await prisma.user.findMany({
-        where: { role: Role.TECHNICIAN },
+        where: { role: Role.TECHNICIAN, isActive: true },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       });
@@ -547,6 +605,55 @@ adminRouter.delete(
       });
 
       res.json({ ok: true, item: updated });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+adminRouter.delete(
+  "/technicians/:id/permanent",
+  requirePermission(Permission.TECH_MANAGE),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id;
+
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, role: true, isActive: true },
+      });
+      if (!user) throw new HttpError(404, "User not found");
+      if (user.role !== Role.TECHNICIAN) throw new HttpError(400, "Only technicians can be deleted here");
+
+      // ✅ רק אם לא פעיל
+      if (user.isActive) throw new HttpError(400, "Cannot delete active technician");
+
+      // ✅ אם קריאות משויכות לטכנאי (assigneeId / resolvedById) -> חסימה + רשימת מספרים
+      const tickets = await prisma.ticket.findMany({
+        where: {
+          OR: [{ assigneeId: id }, { resolvedById: id }],
+        },
+        select: { number: true },
+        orderBy: { number: "asc" },
+      });
+
+      if (tickets.length) {
+        // ייתכנו כפילויות אם אותו טכנאי גם assigned וגם resolved — מנקים
+        const uniqueNumbers = Array.from(new Set(tickets.map((t) => t.number)));
+
+        return res.status(409).json({
+          error: "Technician has tickets",
+          details: { ticketNumbers: uniqueNumbers },
+        });
+      }
+
+      // ✅ למחוק קודם permissions כדי לא להיתקע על FK
+      await prisma.$transaction([
+        prisma.userPermission.deleteMany({ where: { userId: id } }),
+        prisma.user.delete({ where: { id } }),
+      ]);
+
+      return res.json({ ok: true });
     } catch (e) {
       next(e);
     }

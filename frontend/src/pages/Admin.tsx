@@ -23,6 +23,8 @@ import {
   enableAdminTicketStatus,
   enableDepartment,
   enableTechnician,
+  deleteDepartmentPermanent,
+  deleteTechnicianPermanent,
 } from "@/api/admin";
 import type { Permission } from "@/api/auth";
 import { listTechDepartments } from "@/api/departments";
@@ -520,15 +522,58 @@ export default function Admin() {
                             השבת
                           </Button>
                         ) : (
-                          <Button
-                            onClick={async () => {
-                              await enableDepartment(d.id);
-                              await refreshDepartments();
-                              await refreshTechs();
-                            }}
-                          >
-                            הפעל
-                          </Button>
+                          <>
+                            <Button
+                              onClick={async () => {
+                                await enableDepartment(d.id);
+                                await refreshDepartments();
+                                await refreshTechs();
+                              }}
+                            >
+                              הפעל
+                            </Button>
+
+                            <Button
+                              variant="destructive"
+                              onClick={async () => {
+                                if (!confirm("בטוח למחוק את המחלקה לצמיתות?")) return;
+
+                                try {
+                                  await deleteDepartmentPermanent(d.id);
+                                  await refreshDepartments();
+                                  toast({ title: "המחלקה נמחקה לצמיתות" });
+                                } catch (e: any) {
+                                  const nums: number[] = e?.response?.data?.details?.ticketNumbers ?? [];
+                                  if (nums.length) {
+                                    toast({
+                                      title: "נכשל",
+                                      description: `לא ניתן למחוק. קיימות קריאות משויכות למחלקה: ${nums.join(", ")}`,
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+
+                                  const users = e?.response?.data?.details?.users ?? [];
+                                  if (Array.isArray(users) && users.length) {
+                                    const list = users
+                                      .map((u: any) => `${u?.name ?? "-"} (${u?.username ?? "-"})`)
+                                      .join(", ");
+
+                                    toast({
+                                      title: "נכשל",
+                                      description: `לא ניתן למחוק: יש טכנאים משויכים למחלקה: ${list}`,
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+
+                                  toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
+                                }
+                              }}
+                            >
+                              מחק
+                            </Button>
+                          </>
                         )}
                       </div>
                     ))
@@ -950,38 +995,64 @@ export default function Admin() {
                                 השבת
                               </Button>
                             ) : (
-                              <Button
-                                onClick={async () => {
-                                  try {
-                                    const deptId = String(techDeptDraft[t.id] ?? t.techDepartmentId ?? "").trim();
+                              <>
+                                <Button
+                                  onClick={async () => {
+                                    try {
+                                      const deptId = String(techDeptDraft[t.id] ?? t.techDepartmentId ?? "").trim();
 
-                                    if (!deptId) {
-                                      toast({
-                                        title: "נכשל",
-                                        description: "חובה לבחור מחלקה כדי להפעיל טכנאי",
-                                        variant: "destructive",
-                                      });
-                                      return;
+                                      if (!deptId) {
+                                        toast({
+                                          title: "נכשל",
+                                          description: "חובה לבחור מחלקה כדי להפעיל טכנאי",
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+
+                                      await enableTechnician(t.id);
+                                      setTechSearch("");
+                                      setTechView("active");
+                                      await refreshTechs(true);
+                                      setPendingScrollId(`tech-${t.id}`);
+                                      await refreshDepartments();
+
+                                      toast({ title: "טכנאי הופעל והועבר לרשימת הפעילים" });
+                                    } catch (e: any) {
+                                      toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
                                     }
+                                  }}
+                                >
+                                  הפעל
+                                </Button>
 
-                                    await enableTechnician(t.id);
-                                    setTechSearch("");
-                                    // עוברים למסך פעילים
-                                    setTechView("active");
-                                    // מרעננים בוודאות רשימת פעילים
-                                    await refreshTechs(true);
-                                    // גלילה אליו אחרי המעבר
-                                    setPendingScrollId(`tech-${t.id}`);
-                                    await refreshDepartments();
+                                <Button
+                                  variant="destructive"
+                                  onClick={async () => {
+                                    if (!confirm("בטוח למחוק את הטכנאי לצמיתות?")) return;
 
-                                    toast({ title: "טכנאי הופעל והועבר לרשימת הפעילים" });
-                                  } catch (e: any) {
-                                    toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
-                                  }
-                                }}
-                              >
-                                הפעל
-                              </Button>
+                                    try {
+                                      await deleteTechnicianPermanent(t.id);
+                                      await refreshTechs(false);
+                                      toast({ title: "הטכנאי נמחק לצמיתות" });
+                                    } catch (e: any) {
+                                      const nums: number[] = e?.response?.data?.details?.ticketNumbers ?? [];
+                                      if (nums.length) {
+                                        toast({
+                                          title: "נכשל",
+                                          description: `לא ניתן למחוק. קיימות קריאות משויכות לטכנאי: ${nums.join(", ")}`,
+                                          variant: "destructive",
+                                        });
+                                        return;
+                                      }
+
+                                      toast({ title: "נכשל", description: translateBackendError(e), variant: "destructive" });
+                                    }
+                                  }}
+                                >
+                                  מחק
+                                </Button>
+                              </>
                             )}
                             {/* </div> */}
 

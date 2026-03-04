@@ -29,6 +29,11 @@ export async function enableDepartment(id: string) {
   return res.data;
 }
 
+export async function deleteDepartmentPermanent(id: string) {
+  const r = await api.delete(`/admin/departments/${id}/permanent`);
+  return r.data;
+}
+
 
 export type TicketStatusAdminDto = {
   id: string;
@@ -129,6 +134,12 @@ export async function enableTechnician(id: string) {
   const res = await api.patch(`/admin/technicians/${id}/active`, { isActive: true });
   return res.data;
 }
+
+export async function deleteTechnicianPermanent(id: string) {
+  const r = await api.delete(`/admin/technicians/${id}/permanent`);
+  return r.data;
+}
+
 
 export async function reassignTicket(id: string, assigneeId: string) {
   const { data } = await api.post(`/admin/tickets/${id}/reassign`, { assigneeId });
