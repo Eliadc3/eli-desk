@@ -114,7 +114,7 @@ export async function createTechnician(payload: {
 
 export async function patchTechnician(
   id: string,
-  payload: { name?: string; password?: string; techDepartmentId?: string | null; permissions?: Permission[]; isActive?: boolean }
+  payload: { name?: string; password?: string; techDepartmentId?: string ; permissions?: Permission[]; isActive?: boolean }
 ) {
   const { data } = await api.patch(`/admin/technicians/${id}`, payload);
   return data;

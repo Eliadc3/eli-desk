@@ -82,7 +82,7 @@ export const technicianPatchSchema = z.object({
   name: z.string().min(2).optional(),
   username: z.string().min(2).optional(),
   password: z.string().min(6).optional(),
-  techDepartmentId: z.string().optional().nullable(),
+  techDepartmentId: z.string().trim().min(1, "techDepartmentId is required"),
   permissions: z
     .array(
       z.enum([

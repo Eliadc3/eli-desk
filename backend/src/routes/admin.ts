@@ -429,12 +429,39 @@ adminRouter.patch(
       const id = req.params.id;
       const body = technicianPatchSchema.parse(req.body);
 
+      const existing = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, role: true, techDepartmentId: true, isActive: true },
+      });
+      if (!existing) throw new HttpError(404, "User not found");
+      if (existing.role !== Role.TECHNICIAN) throw new HttpError(400, "Only technicians can be edited here");
+
+      const hasDeptInBody = Object.prototype.hasOwnProperty.call(body, "techDepartmentId");
+
+      // המחלקה "אחרי" השמירה: אם נשלחה מחלקה — קח אותה, אחרת קח את הקיימת
+      const deptAfter = hasDeptInBody
+        ? String((body as any).techDepartmentId ?? "").trim()
+        : String(existing.techDepartmentId ?? "").trim();
+
+      // ✅ כלל בסיס: אי אפשר לשמור טכנאי בלי מחלקה (גם אם רק משנים הרשאות/שם)
+      if (!deptAfter) {
+        throw new HttpError(400, "Technician must have a department");
+      }
+
+      // ✅ אם מפעילים – עדיין אותו כלל (אבל נשאיר הודעה ייעודית אם תרצה)
+      if (body.isActive === true && !deptAfter) {
+        throw new HttpError(400, "Cannot enable technician without department");
+      }
+
       const data: any = {};
       if (body.username) data.username = body.username;
       if (body.name) data.name = body.name;
-      if (body.techDepartmentId !== undefined) data.techDepartmentId = body.techDepartmentId;
-      if (body.password) data.passwordHash = await bcrypt.hash(body.password, 10);
       if (body.isActive !== undefined) data.isActive = body.isActive;
+
+      // אם הגיע techDepartmentId בבקשה — נשמור אותו (כבר עבר את החסימה למעלה)
+      if (hasDeptInBody) data.techDepartmentId = deptAfter;
+
+      if (body.password) data.passwordHash = await bcrypt.hash(body.password, 10);
 
       const updated = await prisma.user.update({
         where: { id },

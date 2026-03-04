@@ -50,6 +50,8 @@ type AdminTab = "departments" | "technicians" | "ticket-statuses";
 type DeptSubTab = "hospital" | "tech";
 type ActiveView = "active" | "archived";
 
+
+
 const byNameABC = (a: any, b: any) =>
   String(a?.name ?? "").localeCompare(String(b?.name ?? ""), ["he", "en"], { sensitivity: "base" });
 
@@ -900,6 +902,17 @@ export default function Admin() {
                               <Button
                                 onClick={async () => {
                                   try {
+                                    const deptId = String(techDeptDraft[t.id] ?? t.techDepartmentId ?? "").trim();
+
+                                    if (!deptId) {
+                                      toast({
+                                        title: "נכשל",
+                                        description: "חובה לבחור מחלקה כדי להפעיל טכנאי",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+
                                     await enableTechnician(t.id);
                                     setTechSearch("");
                                     // עוברים למסך פעילים
@@ -928,15 +941,16 @@ export default function Admin() {
                               disabled={!canSave}
                               onClick={async () => {
                                 try {
+                                  const deptId = String(techDeptDraft[t.id] ?? t.techDepartmentId ?? "").trim();
                                   // הגנה נוספת: אם מחלקה dirty אבל ריקה, לא לשלוח
-                                  if (deptIsDirty && !String(techDeptDraft[t.id] ?? "").trim()) {
-                                    toast({
-                                      title: "נכשל",
-                                      description: "חובה לבחור מחלקה",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
+                                  if (!deptId) {
+                                      toast({
+                                        title: "נכשל",
+                                        description: "חובה לבחור מחלקה כדי לשמור טכנאי",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
 
                                   await patchTechnician(t.id, savePayload);
                                   await refreshTechs();
