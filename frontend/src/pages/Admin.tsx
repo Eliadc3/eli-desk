@@ -551,131 +551,182 @@ export default function Admin() {
                 <CardHeader>
                   <CardTitle>צור טכנאי</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <Input
-                    placeholder="שם"
-                    value={newTech.name}
-                    onChange={(e) => setNewTech({ ...newTech, name: e.target.value })}
-                  />
-                  <Input
-                    placeholder="שם משתמש"
-                    value={newTech.username}
-                    onChange={(e) => setNewTech({ ...newTech, username: e.target.value })}
-                  />
-                  <Input
-                    placeholder="סיסמה"
-                    type="password"
-                    value={newTech.password}
-                    onChange={(e) => setNewTech({ ...newTech, password: e.target.value })}
-                  />
+                <CardContent className="space-y-4" dir="rtl">
+                  {/* ===== Row 1: שם | שם משתמש | סיסמה ===== */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">שם</label>
+                      <Input
+                        placeholder="שם"
+                        value={newTech.name}
+                        onChange={(e) => setNewTech({ ...newTech, name: e.target.value })}
+                      />
+                    </div>
 
-                  <select
-                    className="border rounded-md p-2 bg-background"
-                    value={newTech.techDepartmentId}
-                    onChange={(e) => setNewTech({ ...newTech, techDepartmentId: e.target.value })}
-                  >
-                    <option value="">בחר מחלקה</option>
-                    {techDepts.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">שם משתמש</label>
+                      <Input
+                        placeholder="שם משתמש"
+                        value={newTech.username}
+                        onChange={(e) => setNewTech({ ...newTech, username: e.target.value })}
+                      />
+                    </div>
 
-                  <div className="md:col-span-4 border rounded-md p-3 space-y-4">
-                    <div className="text-sm font-medium">הרשאות</div>
-                    <div className="space-y-2 gap-2">
-                      {PERM_GROUPS.map((g) => (
-                        <div key={g.title} className="space-y-2 gap-2">
-                          <div className="text-xs text-muted-foreground">{g.title}</div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            {g.items.map((p) => {
-                              const current: Permission[] = newTech.permissions ?? [];
-                              const checked = current.includes(p.key);
-
-                              return (
-                                <label key={p.key} className="flex items-center gap-2 text-sm">
-                                  <Checkbox
-                                    checked={checked}
-                                    onCheckedChange={(v) => {
-                                      const next = v
-                                        ? Array.from(new Set([...current, p.key]))
-                                        : current.filter((x) => x !== p.key);
-
-                                      setNewTech({ ...newTech, permissions: next });
-                                    }}
-                                  />
-                                  {p.label}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">סיסמה</label>
+                      <Input
+                        placeholder="סיסמה"
+                        type="password"
+                        value={newTech.password}
+                        onChange={(e) => setNewTech({ ...newTech, password: e.target.value })}
+                      />
                     </div>
                   </div>
 
-                  <Button
-                    className="md:col-span-4"
-                    disabled={!canCreateTech}
-                    onClick={async () => {
-                      try {
-                        const techDepartmentId = String(newTech.techDepartmentId ?? "").trim();
+                  {/* ===== Row 2: מחלקה | הרשאות ניהול | הרשאות קריאות ===== */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+                    {/* מחלקה */}
+                    <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+                      <div className="text-xs text-muted-foreground">מחלקה</div>
 
-                        if (!techDepartmentId) {
+                      <select
+                        className="border rounded-md p-2 bg-background w-full"
+                        value={newTech.techDepartmentId}
+                        onChange={(e) => setNewTech({ ...newTech, techDepartmentId: e.target.value })}
+                      >
+                        <option value="">בחר מחלקה</option>
+                        {techDepts.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="text-[11px] text-muted-foreground">
+                        חובה לבחור מחלקה לפני יצירת טכנאי
+                      </div>
+                    </div>
+
+                    {/* הרשאות ניהול */}
+                    <div className="rounded-xl border bg-muted/30 p-4">
+                      <div className="text-xs text-muted-foreground mb-3">הרשאות ניהול</div>
+
+                      <div className="flex flex-col gap-3">
+                        {PERM_GROUPS[0].items.map((p) => {
+                          const current: Permission[] = newTech.permissions ?? [];
+                          const checked = current.includes(p.key);
+
+                          return (
+                            <label key={p.key} className="inline-flex flex-row items-center gap-2 text-sm" dir="rtl">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  const next = v
+                                    ? Array.from(new Set([...current, p.key]))
+                                    : current.filter((x) => x !== p.key);
+
+                                  setNewTech({ ...newTech, permissions: next });
+                                }}
+                              />
+                              <span className="text-right">{p.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* הרשאות קריאות */}
+                    <div className="rounded-xl border bg-muted/30 p-4">
+                      <div className="text-xs text-muted-foreground mb-3">הרשאות קריאות</div>
+
+                      <div className="flex flex-col gap-3">
+                        {PERM_GROUPS[1].items.map((p) => {
+                          const current: Permission[] = newTech.permissions ?? [];
+                          const checked = current.includes(p.key);
+
+                          return (
+                            <label key={p.key} className="inline-flex flex-row items-center gap-2 text-sm" dir="rtl">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  const next = v
+                                    ? Array.from(new Set([...current, p.key]))
+                                    : current.filter((x) => x !== p.key);
+
+                                  setNewTech({ ...newTech, permissions: next });
+                                }}
+                              />
+                              <span className="text-right">{p.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ===== Action ===== */}
+                  <div className="space-y-2">
+                    <Button
+                      className="w-full"
+                      disabled={!canCreateTech}
+                      onClick={async () => {
+                        try {
+                          const techDepartmentId = String(newTech.techDepartmentId ?? "").trim();
+
+                          if (!techDepartmentId) {
+                            toast({
+                              title: "נכשל",
+                              description: "חובה לבחור מחלקה",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+
+                          await createTechnician({
+                            name: String(newTech.name ?? "").trim(),
+                            username: String(newTech.username ?? "").trim(),
+                            password: String(newTech.password ?? ""),
+                            techDepartmentId,
+                            permissions: newTech.permissions ?? [],
+                          });
+
+                          setNewTech({
+                            name: "",
+                            username: "",
+                            password: "",
+                            techDepartmentId: "",
+                            permissions: [],
+                          });
+                          await refreshTechs();
+                          toast({ title: "טכנאי נוצר בהצלחה" });
+                        } catch (e: any) {
+                          const data = e?.response?.data;
+
+                          const fieldErrors = data?.details?.fieldErrors;
+                          const niceDetails = fieldErrors
+                            ? Object.entries(fieldErrors)
+                              .filter(([, arr]) => Array.isArray(arr) && arr.length)
+                              .map(([k, arr]) => `${k}: ${(arr as string[])[0]}`)
+                              .join(" | ")
+                            : null;
+
                           toast({
                             title: "נכשל",
-                            description: "חובה לבחור מחלקה",
+                            description: niceDetails ? translateBackendError(niceDetails) : translateBackendError(e),
                             variant: "destructive",
                           });
-                          return;
                         }
+                      }}
+                    >
+                      הוסף טכנאי
+                    </Button>
 
-                        await createTechnician({
-                          name: String(newTech.name ?? "").trim(),
-                          username: String(newTech.username ?? "").trim(),
-                          password: String(newTech.password ?? ""),
-                          techDepartmentId,
-                          permissions: newTech.permissions ?? [],
-                        });
-
-                        setNewTech({
-                          name: "",
-                          username: "",
-                          password: "",
-                          techDepartmentId: "",
-                          permissions: [],
-                        });
-                        await refreshTechs();
-                        toast({ title: "טכנאי נוצר בהצלחה" });
-                      } catch (e: any) {
-                        const data = e?.response?.data;
-
-                        const fieldErrors = data?.details?.fieldErrors;
-                        const niceDetails = fieldErrors
-                          ? Object.entries(fieldErrors)
-                            .filter(([, arr]) => Array.isArray(arr) && arr.length)
-                            .map(([k, arr]) => `${k}: ${(arr as string[])[0]}`)
-                            .join(" | ")
-                          : null;
-
-                        toast({
-                          title: "נכשל",
-                          description: niceDetails ? translateBackendError(niceDetails) : translateBackendError(e),
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    הוסף טכנאי
-                  </Button>
-
-                  {!canCreateTech && (
-                    <div className="flex text-xs text-muted-foreground text-center">
-                      יש למלא שם, שם משתמש, סיסמה ולבחור מחלקה
-                    </div>
-                  )}
+                    {!canCreateTech && (
+                      <div className="text-xs text-muted-foreground text-center">
+                        יש למלא שם, שם משתמש, סיסמה ולבחור מחלקה
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -944,13 +995,13 @@ export default function Admin() {
                                   const deptId = String(techDeptDraft[t.id] ?? t.techDepartmentId ?? "").trim();
                                   // הגנה נוספת: אם מחלקה dirty אבל ריקה, לא לשלוח
                                   if (!deptId) {
-                                      toast({
-                                        title: "נכשל",
-                                        description: "חובה לבחור מחלקה כדי לשמור טכנאי",
-                                        variant: "destructive",
-                                      });
-                                      return;
-                                    }
+                                    toast({
+                                      title: "נכשל",
+                                      description: "חובה לבחור מחלקה כדי לשמור טכנאי",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
 
                                   await patchTechnician(t.id, savePayload);
                                   await refreshTechs();
@@ -1059,7 +1110,7 @@ export default function Admin() {
                   </div>
 
                   <Button
-                    className={`md:col-span-6 ${!canCreateStatus ? "bg-blue-300 cursor-not-allowed" : ""}`}
+                    className={`md:col-span-6 ${!canCreateStatus}`}
                     disabled={!canCreateStatus}
                     onClick={async () => {
                       try {
