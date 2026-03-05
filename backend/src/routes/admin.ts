@@ -733,7 +733,6 @@ adminRouter.post(
           statusId: orig.statusId,
           priority: orig.priority,
           orgId: orig.orgId,
-          requesterId: orig.requesterId,
           assigneeId: orig.assigneeId,
           source: orig.source,
           externalRequesterName: orig.externalRequesterName,

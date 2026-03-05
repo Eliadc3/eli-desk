@@ -4,6 +4,9 @@ import { prisma } from "../lib/prisma.js";
 import { TicketPriority, TicketSource } from "@prisma/client";
 import { getHospitalDepartments } from "../services/departments.service.js";
 import { env } from "../lib/env.js";
+import { publicTicketCreateSchema } from "./schemas.js";
+import { HttpError } from "../lib/httpError.js";
+import { ZodError } from "zod";
 
 const publicRouter = Router();
 const orgId = env.APP_ORG_ID;
@@ -65,30 +68,47 @@ publicRouter.get("/hospital-departments", async (_req, res, next) => {
 
 publicRouter.post("/tickets", async (req, res) => {
   try {
-    const hospitalDepartmentId = String(req.body?.hospitalDepartmentId ?? "").trim();
-    const subject = String(req.body?.subject ?? "").trim();
-    const description = String(req.body?.description ?? "").trim();
-  
+    // 1) Zod validation (מחזיר fieldErrors ברור)
+    const parsed = publicTicketCreateSchema.safeParse({
+      hospitalDepartmentId: req.body?.hospitalDepartmentId,
+      subject: req.body?.subject,
+      description: req.body?.description,
 
-    if (!hospitalDepartmentId || !subject || !description || !req.body?.name || !req.body?.phone) {
+      // תומך גם בשם/טלפון וגם externalRequesterName/Phone
+      externalRequesterName: req.body?.name ?? req.body?.externalRequesterName,
+      externalRequesterPhone: req.body?.phone ?? req.body?.externalRequesterPhone,
+
+      priority: req.body?.priority,
+      orgId: orgId, // env.APP_ORG_ID
+    });
+
+    if (!parsed.success) {
       return res.status(400).json({
-        message: "All fields are required",
+        error: "Validation error",
+        details: parsed.error.flatten(),
       });
     }
 
-    const priority = normalizePriority(req.body?.priority);
+    const body = parsed.data;
 
-    const externalRequesterName = normalizeStr(req.body?.name ?? req.body?.externalRequesterName);
-    const externalRequesterPhone = normalizeStr(req.body?.phone ?? req.body?.externalRequesterPhone);
+    // 2) normalize (שומר על מה שכבר עשית, אבל אחרי Zod)
+    const hospitalDepartmentId = String(body.hospitalDepartmentId).trim();
+    const subject = String(body.subject).trim();
+    const description = String(body.description).trim();
 
+    const externalRequesterName = String(body.externalRequesterName).trim();
+    const externalRequesterPhone = String(body.externalRequesterPhone).trim();
+
+    const priority = normalizePriority(body.priority);
+
+    // 3) בחר טכנאי פעיל בלבד
     const techs = await prisma.user.findMany({
-      where: { orgId, role: { in: ["TECHNICIAN", "ADMIN"] } },
+      where: { orgId, isActive: true, role: { in: ["TECHNICIAN", "ADMIN"] } },
       select: { id: true },
     });
     const assigneeId = techs.length ? techs[Math.floor(Math.random() * techs.length)].id : null;
 
     const statusId = await getDefaultStatusId(orgId);
-
     const number = await nextTicketNumber();
 
     const ticket = await prisma.ticket.create({
@@ -115,11 +135,18 @@ publicRouter.post("/tickets", async (req, res) => {
       },
     });
 
-    return res.json({ ticket });
+    return res.status(201).json({ ticket });
   } catch (e: any) {
+    // אם בכל זאת נופל פה ZodError ממקום אחר
+    if (e instanceof ZodError) {
+      return res.status(400).json({
+        error: "Validation error",
+        details: e.flatten(),
+      });
+    }
+
     console.error(e);
     return res.status(500).json({ message: e?.message ?? "Server error" });
   }
 });
-
 export default publicRouter;

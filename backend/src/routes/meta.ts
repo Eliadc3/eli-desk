@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { TicketPriority } from "@prisma/client";
+import { Role, TicketPriority } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { userCtx } from "../lib/userCtx.js";
 import { HttpError } from "../lib/httpError.js";
@@ -29,6 +29,28 @@ metaRouter.get("/ticket-statuses", async (req, res, next) => {
 
 metaRouter.get("/ticket-priorities", (_req, res) => {
   res.json({ items: Object.values(TicketPriority) });
+});
+
+// Active assignees list for ticket creation/reassign
+metaRouter.get("/assignees", async (req, res, next) => {
+  try {
+    const { orgId } = userCtx(req);
+    if (!orgId) throw new HttpError(400, "Missing orgId");
+
+    const items = await prisma.user.findMany({
+      where: {
+        orgId,
+        isActive: true,
+        role: Role.TECHNICIAN
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+
+    res.json({ items });
+  } catch (e) {
+    next(e);
+  }
 });
 
 // Preview only (does NOT reserve / increment)

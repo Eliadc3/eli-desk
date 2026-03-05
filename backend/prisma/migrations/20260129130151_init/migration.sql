@@ -61,7 +61,6 @@ CREATE TABLE "Ticket" (
     "statusId" TEXT NOT NULL,
     "priority" TEXT NOT NULL DEFAULT 'MEDIUM',
     "orgId" TEXT NOT NULL,
-    "requesterId" TEXT,
     "assigneeId" TEXT,
     "hospitalDepartmentId" TEXT NOT NULL,
     "source" TEXT NOT NULL DEFAULT 'TECHNICIAN',

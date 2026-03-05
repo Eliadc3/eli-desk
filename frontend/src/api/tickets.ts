@@ -17,7 +17,6 @@ export type Ticket = {
   source: TicketSource;
   createdAt: string;
   updatedAt: string;
-  requester?: UserLite | null;
   assignee?: UserLite | null;
   hospitalDepartment?: DepartmentLite | null;
   externalRequesterName?: string | null;
@@ -50,7 +49,6 @@ export async function createTicket(payload: {
   subject: string;
   description: string;
   priority?: TicketPriority;
-  requesterId?: string;
   assigneeId?: string;
   statusId?: string; // ✅ ID של הסטטוס מהטבלה
   externalRequesterName?: string;
@@ -83,4 +81,12 @@ export async function createPublicTicket(payload: {
 }) {
   const { data } = await api.post("/public/tickets", payload);
   return data.ticket ?? data;
+}
+
+export async function listTicketAssignees() {
+  const r = await api.get("/tickets/assignees");
+  const data = r.data;
+
+  const items = Array.isArray(data) ? data : data?.items;
+  return (items ?? []) as { id: string; name: string }[];
 }

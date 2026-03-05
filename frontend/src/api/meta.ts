@@ -18,3 +18,13 @@ export async function listTicketPriorities() {
   const { data } = await api.get("/meta/ticket-priorities");
   return data.items as string[];
 }
+
+export type AssigneeLite = {
+  id: string;
+  name: string;
+};
+
+export async function listAssignees() {
+  const { data } = await api.get("/meta/assignees");
+  return data.items as AssigneeLite[];
+}

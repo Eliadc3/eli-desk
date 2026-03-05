@@ -7,30 +7,35 @@ export const loginSchema = z.object({
 });
 
 // Tickets
-export const ticketCreateSchema = z
-  .object({
-    hospitalDepartmentId: z.string().min(1),
-    subject: z.string().min(3),
-    description: z.string().min(1),
-    priority: z.nativeEnum(TicketPriority),
-    statusId: z.string().min(1),
-
-    requesterId: z.string().optional().nullable(),
-    externalRequesterName: z.string().optional().nullable(),
-    externalRequesterPhone: z.string().optional().nullable(),
-
-    assigneeId: z.string().optional().nullable(),
-  })
-  .superRefine((val, ctx) => {
-    const hasRequesterId = !!(val.requesterId && String(val.requesterId).trim());
-    const hasExternal =
-      !!(val.externalRequesterName && String(val.externalRequesterName).trim().length >= 2) &&
-      !!(val.externalRequesterPhone && String(val.externalRequesterPhone).trim().length >= 6);
-
-    if (!hasRequesterId && !hasExternal) {
-      ctx.addIssue({ code: "custom", path: ["requesterId"], message: "חובה לבחור פונה או למלא שם+טלפון" });
-    }
+// helper: לפחות 4 ספרות (מתעלם מרווחים/מקפים)
+const phoneMin4Digits = z
+  .string()
+  .transform((v) => String(v ?? "").trim())
+  .refine((v) => (v.match(/\d/g) ?? []).length >= 4, {
+    message: "טלפון חייב להכיל לפחות 4 ספרות",
   });
+
+const ticketCreateBaseSchema = z.object({
+  hospitalDepartmentId: z.string().trim().min(1, "חובה לבחור מחלקה"),
+  externalRequesterName: z.string().trim().min(2, "שם חייב להכיל לפחות 2 תווים"),
+  externalRequesterPhone: phoneMin4Digits,
+
+  subject: z.string().trim().min(3, "נושא חייב להכיל לפחות 3 תווים"),
+  description: z.string().trim().min(6, "תיאור הוא חובה"),
+
+  // אופציונלי – בפנימי יש לך דיפולט, ובחיצוני אתה שם דיפולט
+  statusId: z.string().trim().min(1).optional(),
+  priority: z.nativeEnum(TicketPriority).optional(),
+
+  // עדיין אופציונלי: שיוך לטכנאי
+  assigneeId: z.string().optional().nullable(),
+});
+
+// ✅ טופס פנימי
+export const ticketCreateSchema = ticketCreateBaseSchema;
+
+// ✅ טופס חיצוני
+export const publicTicketCreateSchema = ticketCreateBaseSchema;
 
 export const ticketPatchSchema = z.object({
   subject: z.string().min(3).optional(),
@@ -47,16 +52,6 @@ export const ticketPatchSchema = z.object({
   notes: z.string().nullable().optional(),
   resolutionSummary: z.string().nullable().optional(),
   resolutionDetails: z.string().nullable().optional(),
-});
-
-export const publicTicketCreateSchema = z.object({
-  hospitalDepartmentId: z.string().min(1),
-  subject: z.string().min(3),
-  description: z.string().min(1),
-  priority: z.nativeEnum(TicketPriority).optional(),
-  externalRequesterName: z.string().min(2),
-  externalRequesterPhone: z.string().min(4),
-  orgId: z.string().optional(),
 });
 
 // Technicians (Admin)

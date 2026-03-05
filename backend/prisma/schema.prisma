@@ -125,9 +125,6 @@ model Ticket {
   orgId String
   org   Organization @relation(fields: [orgId], references: [id])
 
-  requesterId String?
-  requester   User?   @relation("RequesterTickets", fields: [requesterId], references: [id])
-
   assigneeId String?
   assignee   User?   @relation("AssigneeTickets", fields: [assigneeId], references: [id])
 

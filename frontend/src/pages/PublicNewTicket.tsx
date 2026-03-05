@@ -28,10 +28,19 @@ export default function PublicNewTicket() {
   }, []);
 
   const submit = async () => {
-    if (!hospitalDepartmentId || !subject.trim() || !description.trim()) {
+    const problems: string[] = [];
+    const phoneDigits = phone.replace(/\D/g, "");
+
+    if (!hospitalDepartmentId) problems.push("מחלקה: חובה לבחור ערך");
+    if (name.trim().length < 2) problems.push("שם: חייב להכיל לפחות 2 תווים");
+    if (phoneDigits.length < 4) problems.push("טלפון: חייב להכיל לפחות 4 ספרות");
+    if (subject.trim().length < 3) problems.push("נושא: חייב להכיל לפחות 3 תווים");
+    if (description.trim().length < 1) problems.push("תיאור: חובה למלא");
+
+    if (problems.length) {
       toast({
-        title: "Missing fields",
-        description:  "All fields are required",
+        title: "חלק מהשדות לא תקינים",
+        description: problems.join(" | \n"),
         variant: "destructive",
       });
       return;

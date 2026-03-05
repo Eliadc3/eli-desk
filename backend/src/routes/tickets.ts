@@ -41,7 +41,7 @@ ticketsRouter.get("/", async (req, res, next) => {
         skip,
         take: pageSize,
         include: {
-          requester: { select: { id: true, name: true} },
+          requester: { select: { id: true, name: true } },
           hospitalDepartment: { select: { id: true, name: true, type: true } },
           assignee: { select: { id: true, name: true } },
           status: { select: { id: true, key: true, labelHe: true, color: true } },
@@ -51,6 +51,30 @@ ticketsRouter.get("/", async (req, res, next) => {
     ]);
 
     res.json({ items, total, page, pageSize });
+  } catch (e) {
+    next(e);
+  }
+});
+
+ticketsRouter.get("/assignees", async (req, res, next) => {
+  try {
+    const { orgId } = userCtx(req);
+
+    const items = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: { in: [Role.TECHNICIAN, Role.ADMIN] },
+
+        // ✅ אם יש orgId בקונטקסט – תביא גם כאלה עם אותו orgId וגם כאלה בלי orgId
+        ...(orgId
+          ? { OR: [{ orgId }, { orgId: null }] }
+          : {}),
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+
+    res.json({ items });
   } catch (e) {
     next(e);
   }
@@ -86,6 +110,7 @@ ticketsRouter.get("/:id", async (req, res, next) => {
   }
 });
 
+
 ticketsRouter.post("/", async (req, res, next) => {
   try {
     const { role, orgId, sub } = userCtx(req);
@@ -114,19 +139,16 @@ ticketsRouter.post("/", async (req, res, next) => {
         number,
         subject: body.subject,
         description: body.description,
-        // priority: body.priority,
+        priority: body.priority ?? "MEDIUM",
         statusId: statusIdToUse,
         orgId: finalOrgId,
-        // IMPORTANT: we do NOT force requesterId=sub for technicians.
-        // Technicians often open tickets on behalf of someone else.
-        requesterId: role === Role.CUSTOMER ? sub : (body.requesterId ?? null),
         source: role === Role.CUSTOMER ? TicketSource.PORTAL : TicketSource.TECHNICIAN,
         assigneeId: body.assigneeId ?? null,
-        hospitalDepartmentId: body.hospitalDepartmentId ?? undefined,
+        hospitalDepartmentId: body.hospitalDepartmentId,
 
-        // Requester details (allowed for internal tickets too)
-        externalRequesterName: body.externalRequesterName ?? null,
-        externalRequesterPhone: body.externalRequesterPhone ?? null,
+        // חובה (לפי schema)
+        externalRequesterName: body.externalRequesterName,
+        externalRequesterPhone: body.externalRequesterPhone,
       },
       include: { org: true },
     });
