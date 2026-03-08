@@ -46,6 +46,7 @@ import { listTicketStatuses } from "@/api/meta";
 import { printTicketLabel } from "@/lib/printTicketLabel";
 import { listHospitalDepartments } from "@/api/departments";
 import { translateBackendError } from "@/utils/backendErrorTranslator";
+import { TicketStatusBadge } from "@/components/tickets/TicketStatusBadge";
 
 type TicketStatusDto = {
   id: string;
@@ -55,24 +56,6 @@ type TicketStatusDto = {
   sortOrder: number;
   isDefault: boolean;
 };
-
-function statusTone(s: string) {
-  switch ((s ?? "").toUpperCase()) {
-    case "NEW":
-      return "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100";
-    case "IN_PROGRESS":
-      return "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100";
-    case "WAITING_ON_CUSTOMER":
-    case "WAITING":
-      return "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100";
-    case "RESOLVED":
-      return "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-100";
-    case "CLOSED":
-      return "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100";
-    default:
-      return "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100";
-  }
-}
 
 function priorityTone(p: string) {
   switch ((p ?? "").toUpperCase()) {
@@ -127,7 +110,6 @@ function makeDraftFromTicket(t: any) {
   };
 }
 
-// ✅ בלי Hook: חישוב טקסט סטטוס להדר, בטוח בכל רנדר
 function computeHeaderStatusLabel(draft: any, statuses: TicketStatusDto[], t: any): string {
   const idFromDraft = draft?.statusId;
   if (idFromDraft) {
@@ -137,7 +119,6 @@ function computeHeaderStatusLabel(draft: any, statuses: TicketStatusDto[], t: an
   return statusLabelFromAny(t?.status);
 }
 
-// ✅ בלי Hook: חישוב key לצבעים/ולוגיקה
 function computeCurrentStatusKey(draft: any, statuses: TicketStatusDto[], t: any): string {
   const idFromDraft = draft?.statusId;
   if (idFromDraft) {
@@ -145,6 +126,21 @@ function computeCurrentStatusKey(draft: any, statuses: TicketStatusDto[], t: any
     if (s?.key) return s.key.toUpperCase();
   }
   return statusKeyFromAny(t?.status);
+}
+
+function computeStatusColor(draft: any, statuses: TicketStatusDto[], t: any): string | null {
+  const idFromDraft = draft?.statusId;
+
+  if (idFromDraft) {
+    const s = statuses.find((x) => x.id === idFromDraft);
+    if (s?.color) return s.color;
+  }
+
+  if (t?.status?.color) {
+    return t.status.color;
+  }
+
+  return null;
 }
 
 export default function TicketDetail() {
@@ -234,9 +230,9 @@ export default function TicketDetail() {
     },
   });
 
-  // ✅ כל החישובים האלה בלי Hooks -> אין שינוי סדר Hooks
   const currentStatusKey = computeCurrentStatusKey(draft, STATUSES, t);
   const headerStatusLabel = computeHeaderStatusLabel(draft, STATUSES, t);
+  const headerStatusColor = computeStatusColor(draft, STATUSES, t);
 
   const isClosingStatus = (s: string) => ["RESOLVED", "CLOSED"].includes((s ?? "").toUpperCase());
 
@@ -265,7 +261,6 @@ export default function TicketDetail() {
     );
   }
 
-  const statusBadgeClass = statusTone(currentStatusKey);
   const priorityBadgeClass = priorityTone(t.priority);
 
   return (
@@ -278,7 +273,11 @@ export default function TicketDetail() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="text-xl md:text-2xl font-bold">Ticket #{t.number}</div>
 
-                  <Badge className={`border-0 ${statusBadgeClass}`}>{headerStatusLabel}</Badge>
+                  <TicketStatusBadge
+                    status={currentStatusKey}
+                    label={headerStatusLabel}
+                    color={headerStatusColor}
+                  />
 
                   <Badge className={`border-0 ${priorityBadgeClass}`}>{t.priority}</Badge>
 

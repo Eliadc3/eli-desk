@@ -114,7 +114,7 @@ export function TicketsByStatusChart() {
           key: k,
           name: s.labelHe,
           value: counts[k] ?? 0,
-          color: s.color ?? "#6B7280",
+          color: s.color ?? "#000000",
         };
       })
       .filter((x) => x.value > 0);

@@ -1,12 +1,9 @@
 import { MainLayout } from "@/components/layout/MainLayout";
 import { TicketsTable, TicketRow } from "@/components/tickets/TicketsTable";
 import { TicketFilters } from "@/components/tickets/TicketFilters";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listTickets } from "@/api/tickets";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
 function toRow(t: any): TicketRow {
@@ -28,35 +25,51 @@ function toRow(t: any): TicketRow {
     .slice(0, 2)
     .join("");
 
-  const statusKey =
+  const statusKeyRaw =
     typeof t.status === "string"
       ? t.status
       : (t.status?.key ?? t.status?.name ?? t.status?.id ?? "");
 
-  const status = String(statusKey).toLowerCase().replace(/_/g, "-");
+  const normalizedStatus = String(statusKeyRaw).toLowerCase().replace(/_/g, "-");
   const priority = String(t.priority || "").toLowerCase();
 
   return {
-    id: t.id,                  // ID אמיתי לניווט
-    displayId: `#${t.number}`,  // לתצוגה בלבד
+    id: t.id,
+    number: t.number,
+    displayId: `#${t.number}`,
     subject: t.subject ?? "",
     requester: { name: requesterName, initials: requesterInitials },
     department: t.hospitalDepartment?.name ?? "—",
-    status: status as any,
+
+    // שדות ישנים בשביל תאימות לאחור
+    status: normalizedStatus as any,
     priority: priority as any,
-    assignee: t.assignee ? { name: assigneeName, initials: assigneeInitials } : undefined,
+
+    // שדות חדשים שחייבים לטבלה
+    statusId: t.status?.id ?? t.statusId ?? "",
+    statusKey: t.status?.key ?? statusKeyRaw ?? "",
+    statusLabel: t.status?.labelHe ?? "",
+    statusColor: t.status?.color ?? "",
+
+    assignee: t.assignee
+      ? {
+          name: assigneeName,
+          initials: assigneeInitials,
+        }
+      : undefined,
+
+    assigneeId: t.assignee?.id ?? null,
     createdAt: new Date(t.createdAt).toLocaleString(),
     isOverdue: false,
   };
 }
 
 export default function Tickets() {
-  const nav = useNavigate();
   const { me } = useAuth();
 
-  const [status, setStatus] = useState<string>("ALL");        // API filter
-  const [priority, setPriority] = useState<string>("all");    // client filter
-  const [search, setSearch] = useState<string>("");           // client filter
+  const [status, setStatus] = useState<string>("ALL");
+  const [priority, setPriority] = useState<string>("all");
+  const [search, setSearch] = useState<string>("");
   const [assigneeFilter, setAssigneeFilter] = useState<"all" | "me" | "unassigned">("all");
 
   const q = useQuery({
@@ -73,24 +86,20 @@ export default function Tickets() {
   const filteredRows = useMemo(() => {
     let out = rows;
 
-    // 1) assignee filter
     if (assigneeFilter === "unassigned") {
       out = out.filter((t: any) => !t.assignee && !t.assigneeId);
     }
 
     if (assigneeFilter === "me") {
-      // אם אין משתמש מחובר, לא מסננים
       if (!me) return out;
 
       const myId = (me as any).id;
       const myName = String((me as any).name ?? "").toLowerCase();
 
       out = out.filter((t: any) => {
-        // עדיפות 1: id
         if (t.assigneeId && myId) return String(t.assigneeId) === String(myId);
         if (t.assignee?.id && myId) return String(t.assignee.id) === String(myId);
 
-        // fallback זמני: name (רק כדי שזה יעבוד אם אין id)
         const aName = String(t.assignee?.name ?? "").toLowerCase();
         if (myName && aName) return aName === myName;
 
@@ -98,12 +107,10 @@ export default function Tickets() {
       });
     }
 
-    // priority client-filter
     if (priority !== "all") {
       out = out.filter((t: any) => String(t.priority || "").toLowerCase() === priority);
     }
 
-    // search client-filter (subject / displayId / requester)
     const s = search.trim().toLowerCase();
     if (s) {
       out = out.filter((t: any) => {
@@ -111,9 +118,10 @@ export default function Tickets() {
           `#${t.number ?? ""}`,
           t.subject ?? "",
           t.requester?.name ?? "",
-          t.externalRequesterName ?? "",
-          t.department?.name ?? "",
+          t.department ?? "",
           t.assignee?.name ?? "",
+          t.statusLabel ?? "",
+          t.statusKey ?? "",
         ]
           .join(" ")
           .toLowerCase();
@@ -124,7 +132,6 @@ export default function Tickets() {
 
     return out;
   }, [rows, assigneeFilter, priority, search, me]);
-
 
   return (
     <MainLayout>
@@ -138,28 +145,43 @@ export default function Tickets() {
 
         <TicketFilters
           onStatusChange={(s) =>
-            setStatus(s === "all" ? "ALL" : String(s).toUpperCase().replace("-", "_"))
+            setStatus(s === "all" ? "ALL" : String(s).toUpperCase().replace(/-/g, "_"))
           }
           onPriorityChange={(p) => setPriority(p)}
           onSearch={(q) => setSearch(q)}
           onAssigneeChange={(v) => setAssigneeFilter(v)}
         />
 
-        <TicketsTable tickets={filteredRows.map((t: any) => ({
-          id: t.id,
-          displayId: `${t.displayId}`,
-          subject: t.subject,
-          requester: { name: t.requester?.name || t.externalRequesterName || "—", initials: "?" },
-          department: t.department ?? "—",
-          status: String(t.statusKey || t.status || "").toLowerCase().replace(/_/g, "-"),
-          priority: String(t.priority || "").toLowerCase(),
-          assignee: t.assignee ? { name: t.assignee.name, initials: "?" } : undefined,
-          createdAt: t.createdAt, // כבר מחרוזת אצלך ב-row
-        })) as any} />
+        <TicketsTable
+          tickets={filteredRows.map((t: any) => ({
+            id: t.id,
+            number: t.number,
+            displayId: t.displayId,
+            subject: t.subject,
+            requester: {
+              name: t.requester?.name || "—",
+              initials: t.requester?.initials || "?",
+            },
+            department: t.department ?? "—",
 
+            status: String(t.status || "").toLowerCase().replace(/_/g, "-"),
+            statusId: t.statusId,
+            statusKey: t.statusKey,
+            statusLabel: t.statusLabel,
+            statusColor: t.statusColor,
 
-
-
+            priority: String(t.priority || "").toLowerCase(),
+            assignee: t.assignee
+              ? {
+                  id: t.assignee.id,
+                  name: t.assignee.name,
+                  initials: t.assignee.initials || "?",
+                }
+              : undefined,
+            assigneeId: t.assigneeId,
+            createdAt: t.createdAt,
+          })) as any}
+        />
       </div>
     </MainLayout>
   );

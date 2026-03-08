@@ -7,16 +7,27 @@ export type TicketSource = "TECHNICIAN" | "PORTAL" | "PUBLIC";
 export type UserLite = { id: string; name: string; };
 export type DepartmentLite = { id: string; name: string; type: "HOSPITAL" | "TECH" };
 
+
+export type TicketStatusDto = {
+  id: string;
+  key: string;
+  labelHe: string;
+  color?: string | null;
+};
+
+
 export type Ticket = {
   id: string;
   number: number;
   subject: string;
   description: string;
   statusId: TicketStatus;
+  status: TicketStatusDto | null;
   priority: TicketPriority;
   source: TicketSource;
   createdAt: string;
   updatedAt: string;
+  requester?: UserLite | null;
   assignee?: UserLite | null;
   hospitalDepartment?: DepartmentLite | null;
   externalRequesterName?: string | null;
@@ -34,7 +45,7 @@ export type TicketActivity = {
   metaJson?: string | null;
 };
 
-export async function listTickets(params?: { status?: string }) {
+export async function listTickets(params?: { statusId?: string; status?: string }) {
   const { data } = await api.get("/tickets", { params });
   return data.items as Ticket[];
 }
@@ -86,7 +97,6 @@ export async function createPublicTicket(payload: {
 export async function listTicketAssignees() {
   const r = await api.get("/tickets/assignees");
   const data = r.data;
-
   const items = Array.isArray(data) ? data : data?.items;
   return (items ?? []) as { id: string; name: string }[];
 }

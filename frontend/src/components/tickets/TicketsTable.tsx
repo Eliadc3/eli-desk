@@ -16,6 +16,7 @@ import { Clock, Building2 } from "lucide-react";
 
 export interface TicketRow {
   id: string;
+  number?: number;
   displayId?: string;
   subject: string;
   requester: {
@@ -23,12 +24,22 @@ export interface TicketRow {
     initials: string;
   };
   department: string;
+
   status: TicketStatus;
+  statusId?: string;
+  statusKey?: string;
+  statusLabel?: string;
+  statusColor?: string | null;
+
   priority: TicketPriority;
+
   assignee?: {
+    id?: string;
     name: string;
     initials: string;
   };
+  assigneeId?: string | null;
+
   createdAt: string;
   slaDeadline?: string;
   isOverdue?: boolean;
@@ -38,6 +49,7 @@ export type TicketStatus =
   | "new"
   | "in-progress"
   | "waiting-on-customer"
+  | "waiting"
   | "resolved"
   | "closed";
 
@@ -47,7 +59,6 @@ export type TicketPriority =
   | "high"
   | "urgent";
 
-
 interface TicketsTableProps {
   tickets: TicketRow[];
   onSelect?: (ids: string[]) => void;
@@ -56,6 +67,7 @@ interface TicketsTableProps {
 export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+
   const toggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);
     if (newSelected.has(id)) {
@@ -81,10 +93,11 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
   return (
     <div className="bg-card rounded-lg border border-border shadow-card overflow-hidden">
       <Table>
-        <TableHeader >
+        <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
             <TableHead className="w-12">
-              <Checkbox className="m-3" 
+              <Checkbox
+                className="m-3"
                 checked={selectedIds.size === tickets.length && tickets.length > 0}
                 onCheckedChange={toggleAll}
               />
@@ -99,6 +112,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
             <TableHead className="w-32">נוצר</TableHead>
           </TableRow>
         </TableHeader>
+
         <TableBody>
           {tickets.map((ticket) => (
             <TableRow
@@ -108,11 +122,13 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
               onClick={() => navigate(`/tickets/${ticket.id}`)}
             >
               <TableCell onClick={(e) => e.stopPropagation()}>
-                <Checkbox className="m-3"
+                <Checkbox
+                  className="m-3"
                   checked={selectedIds.has(ticket.id)}
                   onCheckedChange={() => toggleSelect(ticket.id)}
                 />
               </TableCell>
+
               <TableCell>
                 <Link
                   to={`/tickets/${ticket.id}`}
@@ -121,6 +137,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
                   {ticket.displayId ?? ticket.id}
                 </Link>
               </TableCell>
+
               <TableCell>
                 <Link
                   to={`/tickets/${ticket.id}`}
@@ -129,6 +146,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
                   <span className="text-sm font-medium text-foreground line-clamp-1">
                     {ticket.subject}
                   </span>
+
                   {ticket.isOverdue && (
                     <span className="text-xs text-red-500 flex items-center gap-1 mt-0.5">
                       <Clock className="w-3 h-3" />
@@ -137,6 +155,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
                   )}
                 </Link>
               </TableCell>
+
               <TableCell>
                 <div className="flex items-center gap-2">
                   <Avatar className="h-7 w-7">
@@ -149,18 +168,26 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
                   </span>
                 </div>
               </TableCell>
+
               <TableCell>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <Building2 className="w-3.5 h-3.5" />
                   {ticket.department}
                 </div>
               </TableCell>
+
               <TableCell>
-                <TicketStatusBadge status={ticket.status} />
+                <TicketStatusBadge
+                  status={ticket.status}
+                  label={ticket.statusLabel}
+                  color={ticket.statusColor}
+                />
               </TableCell>
+
               <TableCell>
                 <TicketPriorityBadge priority={ticket.priority} />
               </TableCell>
+
               <TableCell>
                 {ticket.assignee ? (
                   <div className="flex items-center gap-2">
@@ -177,6 +204,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
                   <span className="text-sm text-muted-foreground">לא משויך</span>
                 )}
               </TableCell>
+
               <TableCell>
                 <span className="text-sm text-muted-foreground">
                   {ticket.createdAt}
