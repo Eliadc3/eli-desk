@@ -30,7 +30,6 @@ function toRow(t: any): TicketRow {
       ? t.status
       : (t.status?.key ?? t.status?.name ?? t.status?.id ?? "");
 
-  const normalizedStatus = String(statusKeyRaw).toLowerCase().replace(/_/g, "-");
   const priority = String(t.priority || "").toLowerCase();
 
   return {
@@ -41,18 +40,17 @@ function toRow(t: any): TicketRow {
     requester: { name: requesterName, initials: requesterInitials },
     department: t.hospitalDepartment?.name ?? "—",
 
-    // שדות ישנים בשביל תאימות לאחור
-    status: normalizedStatus as any,
-    priority: priority as any,
-
-    // שדות חדשים שחייבים לטבלה
+    status: statusKeyRaw,
     statusId: t.status?.id ?? t.statusId ?? "",
     statusKey: t.status?.key ?? statusKeyRaw ?? "",
     statusLabel: t.status?.labelHe ?? "",
     statusColor: t.status?.color ?? "",
 
+    priority: priority as any,
+
     assignee: t.assignee
       ? {
+          id: t.assignee.id,
           name: assigneeName,
           initials: assigneeInitials,
         }
@@ -163,13 +161,11 @@ export default function Tickets() {
               initials: t.requester?.initials || "?",
             },
             department: t.department ?? "—",
-
-            status: String(t.status || "").toLowerCase().replace(/_/g, "-"),
+            status: t.status,
             statusId: t.statusId,
             statusKey: t.statusKey,
             statusLabel: t.statusLabel,
             statusColor: t.statusColor,
-
             priority: String(t.priority || "").toLowerCase(),
             assignee: t.assignee
               ? {

@@ -1,54 +1,69 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  STATUS_CONFIG,
-  normalizeTicketStatus,
-  type TicketStatus,
-} from "@/lib/ticketStatus";
 
 type Props = {
-  status?: string | null;
+  statusKey?: string | null;
   label?: string | null;
   color?: string | null;
 };
 
-function hexToRgba(hex: string, alpha: number) {
+function hexToRgb(hex: string) {
   const clean = hex.replace("#", "");
 
   if (clean.length !== 6) {
-    return undefined;
+    return null;
   }
 
   const r = parseInt(clean.slice(0, 2), 16);
   const g = parseInt(clean.slice(2, 4), 16);
   const b = parseInt(clean.slice(4, 6), 16);
 
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  return { r, g, b };
 }
 
-export function TicketStatusBadge({ status, label, color }: Props) {
-  const normalized = normalizeTicketStatus(status) as TicketStatus;
-  const fallback = STATUS_CONFIG[normalized];
+function hexToRgba(hex: string, alpha: number) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return undefined;
 
-  const finalLabel = label?.trim() || fallback.label;
-  const finalColor = color?.trim() || fallback.color;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
 
-  const bg = finalColor?.startsWith("#")
-    ? hexToRgba(finalColor, 0.12)
-    : undefined;
+function prettifyStatusKey(key?: string | null) {
+  if (!key) return "—";
 
-  const border = finalColor?.startsWith("#") ? finalColor : undefined;
-  const text = finalColor?.startsWith("#") ? finalColor : undefined;
+  return String(key)
+    .replace(/_/g, " ")
+    .replace(/-/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-  if (finalColor?.startsWith("#")) {
+function getContrastTextColor(hex: string) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return undefined;
+
+  const luminance =
+    (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+
+  return luminance > 0.7 ? "#111827" : hex;
+}
+
+export function TicketStatusBadge({ statusKey, label, color }: Props) {
+  const finalLabel = label?.trim() || prettifyStatusKey(statusKey);
+  const finalColor = color?.trim() || "";
+
+  if (finalColor.startsWith("#")) {
+    const textColor = getContrastTextColor(finalColor);
+
     return (
       <Badge
         variant="outline"
-        style={{
-          backgroundColor: bg,
-          borderColor: border,
-          color: text,
-        }}
         className="font-medium"
+        style={{
+          backgroundColor: hexToRgba(finalColor, 0.14),
+          borderColor: finalColor,
+          color: textColor,
+        }}
       >
         {finalLabel}
       </Badge>
@@ -56,7 +71,7 @@ export function TicketStatusBadge({ status, label, color }: Props) {
   }
 
   return (
-    <Badge variant="outline" className={fallback.badgeClassName}>
+    <Badge variant="outline" className="font-medium text-foreground">
       {finalLabel}
     </Badge>
   );

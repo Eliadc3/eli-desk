@@ -23,7 +23,7 @@ ticketsRouter.get("/", async (req, res, next) => {
     const { role, orgId } = userCtx(req);
 
     const statusId = String(req.query.statusId ?? "");
-    const statusKey = String(req.query.status ?? "").trim().toLowerCase();
+    const statusKey = String(req.query.status ?? "").trim().toUpperCase();
     const page = Math.max(1, Number(req.query.page ?? 1));
     const pageSize = Math.min(50, Math.max(5, Number(req.query.pageSize ?? 20)));
     const skip = (page - 1) * pageSize;
@@ -37,11 +37,12 @@ ticketsRouter.get("/", async (req, res, next) => {
 
     if (statusId) {
       where.statusId = statusId;
-    } else if (statusKey && statusKey !== "all") {
+    } else if (statusKey && statusKey !== "ALL") {
       where.status = {
         key: statusKey,
       };
-    } const [items, total] = await Promise.all([
+    }
+    const [items, total] = await Promise.all([
       prisma.ticket.findMany({
         where,
         orderBy: { createdAt: "desc" },

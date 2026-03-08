@@ -1,12 +1,10 @@
 import { api } from "./client";
 
-export type TicketStatus = "NEW" | "IN_PROGRESS" | "WAITING" | "RESOLVED" | "CLOSED";
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type TicketSource = "TECHNICIAN" | "PORTAL" | "PUBLIC";
 
-export type UserLite = { id: string; name: string; };
+export type UserLite = { id: string; name: string };
 export type DepartmentLite = { id: string; name: string; type: "HOSPITAL" | "TECH" };
-
 
 export type TicketStatusDto = {
   id: string;
@@ -15,13 +13,12 @@ export type TicketStatusDto = {
   color?: string | null;
 };
 
-
 export type Ticket = {
   id: string;
   number: number;
   subject: string;
   description: string;
-  statusId: TicketStatus;
+  statusId: string;
   status: TicketStatusDto | null;
   priority: TicketPriority;
   source: TicketSource;
@@ -61,7 +58,7 @@ export async function createTicket(payload: {
   description: string;
   priority?: TicketPriority;
   assigneeId?: string;
-  statusId?: string; // ✅ ID של הסטטוס מהטבלה
+  statusId?: string;
   externalRequesterName?: string;
   externalRequesterPhone?: string;
 }) {
@@ -69,12 +66,10 @@ export async function createTicket(payload: {
   return data;
 }
 
-
 export async function updateTicket(id: string, payload: any) {
   const res = await api.patch(`/tickets/${id}`, payload);
   return res.data;
 }
-
 
 export async function getNextTicketNumber() {
   const { data } = await api.get("/meta/ticket-next-number");

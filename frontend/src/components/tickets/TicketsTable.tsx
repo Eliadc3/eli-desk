@@ -25,7 +25,7 @@ export interface TicketRow {
   };
   department: string;
 
-  status: TicketStatus;
+  status?: string;
   statusId?: string;
   statusKey?: string;
   statusLabel?: string;
@@ -44,14 +44,6 @@ export interface TicketRow {
   slaDeadline?: string;
   isOverdue?: boolean;
 }
-
-export type TicketStatus =
-  | "new"
-  | "in-progress"
-  | "waiting-on-customer"
-  | "waiting"
-  | "resolved"
-  | "closed";
 
 export type TicketPriority =
   | "low"
@@ -178,7 +170,7 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
 
               <TableCell>
                 <TicketStatusBadge
-                  status={ticket.status}
+                  statusKey={ticket.statusKey ?? ticket.status}
                   label={ticket.statusLabel}
                   color={ticket.statusColor}
                 />

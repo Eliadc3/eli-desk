@@ -1,61 +1,46 @@
 import { Link } from "react-router-dom";
 import { Clock, User, ArrowLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { listTickets } from "@/api/tickets";
+import { TicketStatusBadge } from "@/components/tickets/TicketStatusBadge";
+import { TicketPriorityBadge } from "@/components/tickets/TicketPriorityBadge";
 
 interface RecentTicket {
   id: string;
   number: number;
   subject: string;
   requesterName: string;
-  status: "new" | "in-progress" | "waiting" | "resolved" | "closed";
-  priority: "critical" | "high" | "medium" | "low";
+  statusKey?: string;
+  statusLabel?: string;
+  statusColor?: string | null;
+  priority: "low" | "medium" | "high" | "urgent";
   createdAt: string;
 }
-
-const statusLabels: Record<RecentTicket["status"], string> = {
-  new: "חדש",
-  "in-progress": "בטיפול",
-  waiting: "ממתין",
-  resolved: "נפתר",
-  closed: "סגור",
-};
-
-const priorityLabels: Record<RecentTicket["priority"], string> = {
-  critical: "קריטי",
-  high: "גבוה",
-  medium: "בינוני",
-  low: "נמוך",
-};
 
 export function RecentTickets() {
   const { data, isLoading } = useQuery({
     queryKey: ["recent-tickets"],
     queryFn: async () => {
       const tickets = await listTickets();
+
       return tickets
         .sort(
           (a: any, b: any) =>
-            new Date(b.createdAt).getTime() -
-            new Date(a.createdAt).getTime()
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )
         .slice(0, 5)
         .map(
           (t: any): RecentTicket => ({
-            id: t.id,                 // ID אמיתי ל־URL
-            number: t.number,         // מספר קריאה
+            id: t.id,
+            number: t.number,
             subject: t.subject,
             requesterName:
               t.source === "PUBLIC"
-                ? t.externalRequesterName ||
-                  "Public"
-                : t.requester?.name ||
-                  "—",
-            status: String(t.status || "")
-              .toLowerCase()
-              .split("_")
-              .join("-") as any,
+                ? t.externalRequesterName || "Public"
+                : t.requester?.name || "—",
+            statusKey: t.status?.key ?? "",
+            statusLabel: t.status?.labelHe ?? "",
+            statusColor: t.status?.color ?? "",
             priority: String(t.priority || "").toLowerCase() as any,
             createdAt: new Date(t.createdAt).toLocaleString(),
           })
@@ -93,35 +78,25 @@ export function RecentTickets() {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="text-xs font-medium text-muted-foreground">
                     #{ticket.number}
                   </span>
 
-                  <span
-                    className={cn(
-                      "status-badge",
-                      `status-${ticket.status}`
-                    )}
-                  >
-                    {statusLabels[ticket.status]}
-                  </span>
+                  <TicketStatusBadge
+                    statusKey={ticket.statusKey}
+                    label={ticket.statusLabel}
+                    color={ticket.statusColor}
+                  />
 
-                  <span
-                    className={cn(
-                      "status-badge",
-                      `priority-${ticket.priority}`
-                    )}
-                  >
-                    {priorityLabels[ticket.priority]}
-                  </span>
+                  <TicketPriorityBadge priority={ticket.priority} />
                 </div>
 
                 <p className="text-sm font-medium text-foreground truncate">
                   {ticket.subject}
                 </p>
 
-                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1">
                     <User className="w-3 h-3" />
                     {ticket.requesterName}

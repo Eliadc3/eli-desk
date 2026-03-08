@@ -274,7 +274,7 @@ export default function TicketDetail() {
                   <div className="text-xl md:text-2xl font-bold">Ticket #{t.number}</div>
 
                   <TicketStatusBadge
-                    status={currentStatusKey}
+                    statusKey={currentStatusKey}
                     label={headerStatusLabel}
                     color={headerStatusColor}
                   />
