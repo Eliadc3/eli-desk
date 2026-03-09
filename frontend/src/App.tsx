@@ -12,7 +12,7 @@ import Admin from "./pages/Admin";
 import TicketDetail from "./pages/TicketDetail";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
-import PublicTicketCreated from "./pages/publicTicketCreated";
+import PublicTicketCreated from "./pages/PublicTicketCreated";
 
 
 const queryClient = new QueryClient();
