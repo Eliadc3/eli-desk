@@ -300,15 +300,25 @@ export function useAdminPage() {
 
   const disableDepartmentHandler = async (departmentId: string) => {
     if (!confirm("Disable department?")) return;
-    await disableDepartment(departmentId);
-    await refreshDepartments();
-    await refreshTechs();
+    try {
+      await disableDepartment(departmentId);
+      await refreshDepartments();
+      await refreshTechs();
+      toast({ title: "המחלקה הושבתה" });
+    } catch (error: any) {
+      toast({ title: "נכשל", description: translateBackendError(error), variant: "destructive" });
+    }
   };
 
   const enableDepartmentHandler = async (departmentId: string) => {
-    await enableDepartment(departmentId);
-    await refreshDepartments();
-    await refreshTechs();
+    try {
+      await enableDepartment(departmentId);
+      await refreshDepartments();
+      await refreshTechs();
+      toast({ title: "המחלקה הופעלה" });
+    } catch (error: any) {
+      toast({ title: "נכשל", description: translateBackendError(error), variant: "destructive" });
+    }
   };
 
   const deleteDepartmentPermanently = async (departmentId: string) => {
@@ -375,9 +385,14 @@ export function useAdminPage() {
 
   const disableTechnicianHandler = async (technicianId: string) => {
     if (!confirm("Disable technician?")) return;
-    await disableTechnician(technicianId);
-    await refreshTechs();
-    await refreshDepartments();
+    try {
+      await disableTechnician(technicianId);
+      await refreshTechs();
+      await refreshDepartments();
+      toast({ title: "הטכנאי הושבת" });
+    } catch (error: any) {
+      toast({ title: "נכשל", description: translateBackendError(error), variant: "destructive" });
+    }
   };
 
   const enableTechnicianHandler = async (technician: any) => {

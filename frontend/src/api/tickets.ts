@@ -95,3 +95,20 @@ export async function listTicketAssignees() {
   const items = Array.isArray(data) ? data : data?.items;
   return (items ?? []) as { id: string; name: string }[];
 }
+
+export async function bulkUpdateTickets(payload: {
+  ticketIds: string[];
+  statusId?: string;
+  assigneeId?: string | null;
+  priority?: TicketPriority;
+}) {
+  const { data } = await api.patch("/tickets/bulk", payload);
+  return data;
+}
+
+export async function bulkDeleteTickets(ticketIds: string[]) {
+  const { data } = await api.delete("/tickets/bulk", {
+    data: { ticketIds },
+  });
+  return data;
+}

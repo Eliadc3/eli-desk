@@ -44,6 +44,11 @@ export function translateBackendError(err: any): string {
     return `לא ניתן לבצע פעולה. הקריאות המשויכות: ${ticketNumbers.join(", ")}`;
   }
 
+  const users = data?.details?.users;
+  if (Array.isArray(users) && users.length) {
+    return `לא ניתן לבצע פעולה. קיימים טכנאים משויכים: ${users.map((u: any) => `${u?.name ?? "-"} (${u?.username ?? "-"})`).join(", ")}`;
+  }
+
   // 3) בסיס: message/error/err.message
   let out =
     typeof err === "string"
@@ -77,7 +82,8 @@ export function translateBackendError(err: any): string {
     .replace(/Username already exists/i, "שם המשתמש כבר קיים. בחר שם משתמש אחר.")
     .replace(/Permission already assigned/i, "ההרשאה כבר משויכת למשתמש.")
     .replace(/Technician must have a department/i, "חובה לבחור מחלקה")
-    .replace(/Cannot enable technician without department/i, "לא ניתן להפעיל טכנאי ללא מחלקה");
+    .replace(/Cannot enable technician without department/i, "לא ניתן להפעיל טכנאי ללא מחלקה")
+    .replace(/Bulk close is not allowed/i, "לא ניתן לסגור קריאות בעדכון מרובה");
 
   return out;
 }

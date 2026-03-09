@@ -10,7 +10,7 @@ import { requireRole } from "./middleware/requireRole.js";
 import { Prisma , Role } from "@prisma/client";
 import { authRouter } from "./routes/auth.js";
 import { ticketsRouter } from "./routes/tickets.js";
-import { adminRouter } from "./routes/admin.js";
+import { adminRouter } from "./routes/admin/index.js";
 import { departmentsRouter } from "./routes/departments.js";
 import publicRouter  from "./routes/public.js";
 import { dashboardRouter } from "./routes/dashboard.js";

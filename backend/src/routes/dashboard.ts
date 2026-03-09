@@ -154,9 +154,15 @@ dashboardRouter.get("/summary", async (req, res, next) => {
             ...whereBase,
             status: {
                 is: {
-                    key: { not: "closed" },
+                    key: { not: "CLOSED" },
                 },
             },
+        };
+
+        const technicianWorkloadWhere = {
+            ...whereBase,
+            assigneeId: { not: null },
+            closedAt: null,
         };
 
 
@@ -239,7 +245,7 @@ dashboardRouter.get("/summary", async (req, res, next) => {
         const [openByTech, resolvedTodayByTech] = await Promise.all([
             prisma.ticket.groupBy({
                 by: ["assigneeId"],
-                where: { ...openWhere, assigneeId: { in: techIds } },
+                where: { ...technicianWorkloadWhere, assigneeId: { in: techIds } },
                 _count: { _all: true },
             }),
             prisma.ticket.groupBy({

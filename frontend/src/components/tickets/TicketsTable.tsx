@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Table,
@@ -53,34 +52,18 @@ export type TicketPriority =
 
 interface TicketsTableProps {
   tickets: TicketRow[];
-  onSelect?: (ids: string[]) => void;
+  selectedTicketIds: string[];
+  onToggleTicketSelection: (ticketId: string, checked: boolean) => void;
+  onToggleSelectAllCurrentPage: (checked: boolean, ticketIdsOnPage: string[]) => void;
 }
 
-export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+export function TicketsTable({
+  tickets,
+  selectedTicketIds,
+  onToggleTicketSelection,
+  onToggleSelectAllCurrentPage,
+}: TicketsTableProps) {
   const navigate = useNavigate();
-
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-    onSelect?.(Array.from(newSelected));
-  };
-
-  const toggleAll = () => {
-    if (selectedIds.size === tickets.length) {
-      setSelectedIds(new Set());
-      onSelect?.([]);
-    } else {
-      const allIds = new Set(tickets.map((t) => t.id));
-      setSelectedIds(allIds);
-      onSelect?.(Array.from(allIds));
-    }
-  };
 
   return (
     <div className="bg-card rounded-lg border border-border shadow-card overflow-hidden">
@@ -90,8 +73,16 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
             <TableHead className="w-12">
               <Checkbox
                 className="m-3"
-                checked={selectedIds.size === tickets.length && tickets.length > 0}
-                onCheckedChange={toggleAll}
+                checked={
+                  tickets.length > 0 &&
+                  tickets.every((ticket) => selectedTicketIds.includes(ticket.id))
+                }
+                onCheckedChange={(checked) =>
+                  onToggleSelectAllCurrentPage(
+                    Boolean(checked),
+                    tickets.map((ticket) => ticket.id)
+                  )
+                }
               />
             </TableHead>
             <TableHead className="w-24">מזהה</TableHead>
@@ -110,14 +101,15 @@ export function TicketsTable({ tickets, onSelect }: TicketsTableProps) {
             <TableRow
               key={ticket.id}
               className="group cursor-pointer"
-              data-selected={selectedIds.has(ticket.id)}
-              onClick={() => navigate(`/tickets/${ticket.id}`)}
+              data-selected={selectedTicketIds.includes(ticket.id)} onClick={() => navigate(`/tickets/${ticket.id}`)}
             >
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <Checkbox
                   className="m-3"
-                  checked={selectedIds.has(ticket.id)}
-                  onCheckedChange={() => toggleSelect(ticket.id)}
+                  checked={selectedTicketIds.includes(ticket.id)}
+                  onCheckedChange={(checked) =>
+                    onToggleTicketSelection(ticket.id, Boolean(checked))
+                  }
                 />
               </TableCell>
 
